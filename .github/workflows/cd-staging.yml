@@ -1,0 +1,124 @@
+# Deploy to staging on push to main (after all CI checks pass)
+name: Deploy — Staging
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false # Never cancel a deployment in progress
+
+env:
+  NODE_VERSION: '20'
+  PNPM_VERSION: '9'
+  AWS_REGION: ap-southeast-2
+  CDK_ENV: staging
+
+jobs:
+  # Gate — all checks must pass before deploy
+  ci-gate:
+    name: CI Gate
+    uses: ./.github/workflows/ci.yml
+    secrets: inherit
+
+  integration-gate:
+    name: Integration Gate
+    uses: ./.github/workflows/integration.yml
+    secrets: inherit
+
+  # Deploy
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: [ci-gate, integration-gate]
+    environment:
+      name: staging
+      url: https://staging.example.com
+
+    permissions:
+      id-token: write # OIDC — no long-lived AWS keys
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_STAGING }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Run generation pipeline
+        run: pnpm generate
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL_STAGING }}
+
+      - name: Build all workspaces
+        run: pnpm turbo run build
+        env:
+          NEXT_PUBLIC_API_BASE_URL: ${{ vars.API_BASE_URL_STAGING }}
+          NEXT_PUBLIC_APP_ENV: staging
+
+      - name: Run database migrations
+        run: pnpm db:migrate:deploy
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL_STAGING }}
+
+      - name: Deploy API (ECS Fargate)
+        run: |
+          cd infra
+          pnpm cdk deploy app-staging-api \
+            --require-approval never \
+            --outputs-file cdk-outputs.json
+        env:
+          CDK_DEPLOY_ENV: staging
+
+      - name: Roll out ECS service
+        run: |
+          aws ecs update-service \
+            --cluster app-staging \
+            --service app-staging-api \
+            --force-new-deployment
+        env:
+          AWS_REGION: ap-southeast-2
+
+      - name: Deploy Web (CloudFront + S3)
+        run: |
+          cd infra
+          pnpm cdk deploy WebStack-staging \
+            --require-approval never
+        env:
+          CDK_DEPLOY_ENV: staging
+
+      - name: Smoke test staging
+        run: |
+          API_URL="${{ vars.API_BASE_URL_STAGING }}"
+          echo "Testing API health..."
+          curl -sf "${API_URL}/health" | jq .
+          echo "✅ Staging smoke test passed"
+
+      - name: Notify deployment
+        if: always()
+        uses: slackapi/slack-github-action@v1
+        with:
+          channel-id: ${{ vars.SLACK_DEPLOY_CHANNEL }}
+          slack-message: |
+            *Staging Deploy:* ${{ job.status == 'success' && '✅ Success' || '❌ Failed' }}
+            *Commit:* ${{ github.sha }}
+            *Author:* ${{ github.actor }}
+            *URL:* https://staging.example.com
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}

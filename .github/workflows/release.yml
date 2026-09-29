@@ -1,0 +1,71 @@
+# Automated release — changelog + version bump + GitHub release
+# Triggered manually or on merge to main with release commits
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version bump type'
+        required: true
+        type: choice
+        options: [patch, minor, major]
+
+jobs:
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: '9'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: pnpm
+
+      - name: Configure git
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Bump version
+        id: version
+        run: |
+          NEW_VERSION=$(pnpm version ${{ github.event.inputs.version }} --no-git-tag-version)
+          echo "new_version=${NEW_VERSION}" >> $GITHUB_OUTPUT
+
+      - name: Generate changelog
+        uses: orhun/git-cliff-action@v3
+        with:
+          config: cliff.toml
+          args: --tag ${{ steps.version.outputs.new_version }}
+        env:
+          OUTPUT: CHANGELOG.md
+
+      - name: Commit and tag
+        run: |
+          git add -A
+          git commit -m "chore(release): ${{ steps.version.outputs.new_version }}"
+          git tag ${{ steps.version.outputs.new_version }}
+          git push origin main --follow-tags
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.new_version }}
+          body_path: CHANGELOG.md
+          generate_release_notes: false

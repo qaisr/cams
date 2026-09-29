@@ -1,0 +1,74 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://cans.ppcc/config/glossary.schema.json",
+  "title": "CANS cross-tool glossary",
+  "description": "Shared, git-tracked bank-vocabulary glossary (01c Phase 2). Consulted by the confluence-search agent AND the JIRA jira-helper so a query like 'NTB acting as a POBO' is understood, not fumbled. Every entry is HUMAN-CONFIRMED on write — never guessed and silently persisted (ask-last resolution order: glossary -> specs/ -> local mirrors -> ask). Stores meaning + provenance POINTERS only; NEVER secrets or restricted page body text. Tool-neutral by design: keyed by the term, no tool-specific fields.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["terms"],
+  "properties": {
+    "terms": {
+      "type": "object",
+      "description": "Map of TERM (as written, e.g. an acronym like POBO) -> its resolved meaning. Lookup is case-insensitive via the `aliases` array; the key is the canonical display form.",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["expansion", "confirmedBy"],
+        "properties": {
+          "expansion": {
+            "type": "string",
+            "description": "The full-text expansion of the term, e.g. 'Payment On Behalf Of' for POBO. Used to expand the search query before calling Rovo/CQL."
+          },
+          "definition": {
+            "type": ["string", "null"],
+            "description": "A one-to-two sentence plain-language meaning. Paraphrased — never a verbatim copy of restricted page content."
+          },
+          "provenance": {
+            "type": "array",
+            "description": "Where the meaning was established. POINTERS ONLY — a sourceRef plus an optional short paraphrased quote. Never restricted body text.",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["source"],
+              "properties": {
+                "source": {
+                  "type": "string",
+                  "description": "A pointer, not content. e.g. 'confluence:PCON:2042342654', 'jira:CANS-123', 'specs/business-requirements.md', or a URL. Recorded even for restricted pages (the pointer is safe; the body is not copied)."
+                },
+                "quote": {
+                  "type": ["string", "null"],
+                  "description": "OPTIONAL short paraphrase of the defining sentence. Omit or null for restricted sources — keep the pointer, drop the text."
+                },
+                "confidence": {
+                  "type": "string",
+                  "enum": ["high", "medium", "low"],
+                  "description": "How direct the evidence was. 'high' = an explicit definition/first-use expansion; 'low' = inferred from usage."
+                }
+              }
+            }
+          },
+          "aliases": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Case/format variants that resolve to this entry, e.g. ['pobo', 'payment-on-behalf-of']. Matched case-insensitively during term resolution."
+          },
+          "relatedTerms": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Other glossary keys worth surfacing alongside this one, e.g. POBO relatedTerms ['NTB', 'delegated-authority']."
+          },
+          "confirmedBy": {
+            "type": "string",
+            "enum": ["human"],
+            "description": "Provenance of the WRITE itself. Always 'human' — this glossary is human-confirmed on write, with no exceptions. An entry with any other value is invalid and must not exist."
+          },
+          "confirmedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "ISO 8601 timestamp of the human confirmation."
+          }
+        }
+      }
+    }
+  }
+}

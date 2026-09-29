@@ -1,0 +1,1221 @@
+---
+description: >-
+  Onboard an existing project into the Claude AI framework. Scans the codebase, detects
+  the technology stack, interviews the user about desired improvements, runs an ambiguity
+  review, and generates three bootstrap artifacts in docs/onboarding-tasks/: the task
+  registry tracker (0-tasks-index.md), the incremental task generator prompt
+  (create-tasks.md), and the quickstart guide (onboarding-guide.md). Individual task
+  files are generated incrementally by running create-tasks.md, avoiding token overflow.
+agent: build
+subtask: false
+model: @bedrock-eus2/us.anthropic.claude-opus-4-8
+reasoning_effort: high
+---
+
+# Initialize — Existing Project Onboarding
+
+## Input
+
+$ARGUMENTS (optional — path to any existing documentation, README, or requirements
+file that describes the project. Omit to let the wizard scan the codebase instead.)
+
+---
+
+## Purpose
+
+`/initialize` is the entry point for **existing projects** that want to adopt the Claude
+AI framework. It runs a guided setup wizard that:
+
+1. Confirms the project context and folder layout
+2. Scans the codebase to discover the tech stack
+3. Interviews the user about which improvements they want to adopt
+4. Runs an ambiguity review to surface gaps before any work is planned
+5. Generates three bootstrap artifacts in `docs/onboarding-tasks/`:
+   - `0-tasks-index.md` — the master tracker, containing full project context and
+     the complete planned task registry (all tasks listed but not yet generated)
+   - `create-tasks.md` — a self-contained prompt that, when run, reads the tracker,
+     proposes the next batch of pending tasks to generate, and writes self-sufficient
+     `task-NNN-*.md` files incrementally, updating statuses in the tracker
+   - `onboarding-guide.md` — a quickstart reference for the team
+6. Does **not** generate individual task files — those are produced incrementally by
+   running `docs/onboarding-tasks/create-tasks.md` as a prompt, avoiding token overflow
+
+**If you have no existing code at all**, use the greenfield workflow instead:
+
+```text
+/create-specifications → /create-epics → /implement-epic
+```
+
+---
+
+## Token Efficiency Policy
+
+This command runs once at project adoption. Load only what is needed each phase.
+After each phase, trim: remove agents and standards not needed for the next phase.
+
+- Phase 1–2 (Discovery): no standards loaded — rely on scan output only
+- Phase 3 (Selection): load only `@.claude/CLAUDE.md` for capability reference
+- Phase 4 (Ambiguity): load `@.claude/agents/ambiguity-analyst.md`
+- Phase 5 (Bootstrap): write exactly three files — no task file contents are expanded
+  inline; all detail lives inside `0-tasks-index.md` and `create-tasks.md`
+
+**Why three files, not N task files?**
+Generating all task files in one run causes token overflow for projects with many
+selected improvements. The bootstrap approach defers task-file generation to
+`create-tasks.md`, which processes a small batch per run and stays within token limits.
+
+---
+
+## Wizard Phases
+
+```text
+PHASE 1 — Context Welcome & Layout Check
+  ↓
+PHASE 2 — Codebase Discovery Scan
+  ↓
+PHASE 3 — Feature & Improvement Selection
+  ↓
+PHASE 4 — Detail Collection & Ambiguity Review
+  ↓
+PHASE 5 — Bootstrap Artifact Generation
+            ├─ docs/onboarding-tasks/0-tasks-index.md   (task tracker + full context)
+            ├─ docs/onboarding-tasks/create-tasks.md   (incremental task generator prompt)
+            └─ docs/onboarding-tasks/onboarding-guide.md (quickstart guide)
+```
+
+After `/initialize` completes, the user runs `docs/onboarding-tasks/create-tasks.md`
+as a prompt to generate the next batch of task files. Each run produces ~3 task files
+and updates the tracker until all tasks are generated and implemented.
+
+---
+
+## Phase 1 — Context Welcome & Layout Check
+
+### 1a: Welcome message
+
+Print the following welcome message verbatim, then continue:
+
+```text
+────────────────────────────────────────────────────────────────
+  /initialize — Existing Project Onboarding Wizard
+────────────────────────────────────────────────────────────────
+
+This wizard will onboard your existing project into the Claude AI
+framework and set up the epic-based development workflow for you.
+
+Before we begin, a few important notes:
+
+› This command is FOR EXISTING PROJECTS that already have code.
+  If you are starting a brand-new project with no code, use the
+  greenfield workflow instead:
+    /create-specifications → /create-epics → /implement-epic
+
+› The .claude/ folder should live in the same root directory as
+  your project code. If it is elsewhere, move it before continuing.
+
+› The framework works best with a MONOREPO layout:
+    apps/web/             ← NextJS frontend application
+    apps/api/             ← NestJS backend API (Fargate)
+    packages/             ← shared packages (validation, api-spec, etc.)
+    infra/               ← IaC (AWS CDK v2)
+  If your project is not a monorepo, the wizard will ask whether
+  you want to reorganise it.
+
+› All tasks generated by this wizard will be placed in:
+    docs/onboarding-tasks/
+  Each task is self-sufficient and independently executable.
+
+Let's start by confirming your project layout.
+────────────────────────────────────────────────────────────────
+```
+
+### 1b: Confirm folder layout
+
+Scan the workspace root for top-level directories and files.
+
+Determine which of the following canonical layout patterns the project matches:
+
+| ID | Layout                      | Description                                                        |
+|----|-----------------------------|--------------------------------------------------------------------|
+| A  | Monorepo (canonical)        | `apps/web/`, `apps/api/`, `infra/` all present                     |
+| B  | Monorepo (partial)          | Some canonical dirs present, others absent                         |
+| C  | Single-app (frontend only)  | Only a frontend app at root or in `src/`, `app/`, `client/`        |
+| D  | Single-app (backend only)   | Only a backend API at root or in `src/`, `api/`                    |
+| E  | Multi-repo (separate repos) | No monorepo structure detected                                     |
+| F  | Other                       | Structure does not match any pattern above                         |
+
+Show the detected pattern and ask the user to confirm or correct:
+
+```text
+Detected layout: [B] Monorepo (partial) — frontend found at apps/web/,
+                 but no backend or infrastructure directories detected.
+
+Which layout describes your project?
+  [A]  Monorepo (canonical) — apps/web/, apps/api/, infra/                      ← RECOMMENDED
+  [B]  Monorepo (partial)   — not all canonical dirs exist yet
+  [C]  Single-app frontend  — frontend only, no backend in this repo
+  [D]  Single-app backend   — backend only, no frontend in this repo
+  [E]  Multi-repo           — frontend and backend are in separate git repos
+  [T]  None of these        — describe your layout in plain text
+```
+
+> **If layout E is selected**, inform the user that the framework works best in a
+> monorepo. Offer to help restructure into a monorepo as one of the onboarding tasks,
+> but allow them to continue without restructuring.
+> **If layout is not A**, note any needed restructuring as a candidate task and continue.
+
+---
+
+## Phase 2 — Codebase Discovery Scan
+
+> **Token note**: Run discovery commands inline. Do not load any framework standards yet.
+
+### 2a: File and structure scan
+
+Run these scans to discover the codebase shape:
+
+```bash
+# Project structure overview (top 4 levels, ignore common noise)
+find . -not -path '*/.git/*' \
+       -not -path '*/node_modules/*' \
+       -not -path '*/.next/*' \
+       -not -path '*/.claude/*' \
+       -not -path '*/dist/*' \
+       -not -path '*/build/*' \
+       -not -path '*/coverage/*' \
+       -not -path '*/.turbo/*' \
+       -maxdepth 4 -type f | sort | head -200
+
+# Package manifests
+find . -name "package.json" -not -path "*/node_modules/*" | head -10
+find . -name "pnpm-workspace.yaml" | head -3
+find . -name "turbo.json" | head -3
+
+# Docker / compose
+find . -name "Dockerfile*" -o -name "docker-compose*.yml" | head -10
+
+# Infrastructure-as-code
+find . -name "cdk.json" -o -name "*.tf" -o -name "serverless.yml" | head -10
+
+# CI/CD
+find . -path "*/.github/workflows/*.yml" | head -10
+find . -name "Jenkinsfile" -o -name ".gitlab-ci.yml" | head -5
+
+# OpenAPI
+find . -name "openapi*.yaml" -o -name "openapi*.json" -o \
+       -name "swagger*.yaml" | head -10
+
+# Database migrations
+find . -path "*/prisma/migrations/*.sql" -o \
+       -name "schema.prisma" -o \
+       -path "*/migrations/*.sql" | sort | head -20
+
+# Test files (rough count)
+echo "Backend TS test files:"; find . \( -name "*.spec.ts" -o -name "*.integration.spec.ts" \) \
+  -path "*/apps/api/*" -not -path "*/node_modules/*" | wc -l
+echo "TS/JS test files:"; find . \( -name "*.test.ts" -o -name "*.spec.ts" \
+  -o -name "*.test.tsx" -o -name "*.spec.tsx" -o -name "*.test.js" \
+  -o -name "*.spec.js" \) -not -path "*/node_modules/*" | wc -l
+echo "Python test files:"; find . -name "test_*.py" -o -name "*_test.py" \
+  -not -path "*/.venv/*" | wc -l
+
+# Backend runtime
+grep -r "\"node\"\|nodejs" --include="package.json" . 2>/dev/null | head -3
+grep -r "nest" --include="package.json" . 2>/dev/null | head -3
+
+# Node/pnpm workspace setup
+cat pnpm-workspace.yaml 2>/dev/null || cat lerna.json 2>/dev/null || true
+```
+
+### 2b: Read key dependency files
+
+Read (if present):
+
+- Root `package.json`, `pnpm-workspace.yaml`, `turbo.json`, `requirements.txt`, `pyproject.toml`
+- `apps/web/package.json` (or detected frontend manifest)
+- `apps/api/package.json` (or detected backend manifest)
+- Any `README.md` at root level (for stated tech stack)
+
+### 2c: Compile the technology profile
+
+Produce a structured Technology Profile:
+
+```text
+┌─────────────────────────────────────────────────────────────
+│  Technology Profile — [Project Name inferred from root dir]
+├─────────────────────────────────────────────────────────────
+│  Frontend
+│    Language      : [TypeScript / JavaScript / ...]
+│    Framework     : [Next.js 14 / React / Vue / SvelteKit / ...]
+│    UI Library    : [Lumen / MUI / Tailwind / Chakra / None detected]
+│    State Mgmt    : [TanStack Query / Redux / Zustand / None]
+│    Build Tool    : [Vite / Next.js / Webpack / ...]
+│    Package Mgr   : [pnpm / npm / yarn]
+│    Test Tools    : [Jest / Vitest / Playwright / None detected]
+│
+│  Backend
+│    Language      : [TypeScript / JavaScript / Python 3.x / Go / ...]
+│    Framework     : [NestJS / FastAPI / Express / ...]
+│    Build Tool    : [pnpm / npm / pip / ...]
+│    ORM / DB Access: [Prisma / TypeORM / SQLAlchemy / ...]
+│    Test Tools    : [Jest / Supertest / pytest / TestContainers / None]
+│
+│  Database
+│    Engine        : [PostgreSQL / MySQL / MongoDB / DynamoDB / None]
+│    Migration Tool: [Prisma Migrate / Alembic / TypeORM Migrations / None]
+│    Schema state  : [Migrations found / Schema file / None detected]
+│
+│  Infrastructure
+│    Provider      : [AWS / Azure / GCP / None detected]
+│    IaC Tool      : [AWS CDK / Terraform / Pulumi / None detected]
+│    Containers    : [Docker Compose / Kubernetes / None detected]
+│    CI/CD         : [GitHub Actions / GitLab CI / Jenkins / None detected]
+│
+│  API Contract
+│    Style         : [OpenAPI (found) / GraphQL / gRPC / REST (no spec) / None]
+│    Spec location : [path/to/openapi.yaml or Not found]
+│
+│  Auth
+│    Method        : [JWT / Session / OAuth2/OIDC / Basic / Not detected]
+│    Provider      : [PingID / Auth0 / Keycloak / Firebase / Custom / Unknown]
+│
+│  Monorepo Tooling: [pnpm workspaces + Turborepo / Nx / Lerna / None]
+│
+│  Test Coverage   : [Frontend N files / Backend N files / E2E: yes/no]
+│  Security Config : [Spring Security / Helmet / CORS / None detected]
+│  Observability   : [CloudWatch / DataDog / OpenTelemetry / None detected]
+└─────────────────────────────────────────────────────────────
+```
+
+### 2d: Confirm Technology Profile with user
+
+Present the profile and ask:
+
+```text
+Does this technology profile look correct?
+
+  [A]  Yes, this is correct — proceed to feature selection
+  [B]  Some items are wrong — I'll correct them
+  [C]  Something is missing — I want to add a technology
+  [T]  Neither — describe corrections in plain text
+```
+
+If the user selects B or C, accept corrections and update the profile before continuing.
+Note any technologies that are planned/intended but not yet implemented — mark them
+`(planned)` in the profile for later task generation.
+
+---
+
+## Phase 3 — Feature & Improvement Selection
+
+### 3a: Introduction
+
+Print:
+
+```text
+────────────────────────────────────────────────────────────────
+  Phase 3 — Select Improvements to Implement
+────────────────────────────────────────────────────────────────
+Below is a list of improvements the framework can help implement.
+Select all that apply. Each selection will become one or more
+onboarding tasks in docs/onboarding-tasks/.
+
+For each group, pick your options. Enter the letter codes separated
+by commas (e.g., A, C, F) or enter ALL to select all.
+────────────────────────────────────────────────────────────────
+```
+
+### 3b: Present improvement categories
+
+Present these grouped options. Show only options relevant to the detected stack
+(skip options that do not apply — e.g., skip Python-only options if no Python detected).
+
+---
+
+#### GROUP 1 — Project Structure & Monorepo
+
+```text
+  [A1]  Restructure into canonical monorepo layout
+      (apps/web/, apps/api/, infra/)                          ← RECOMMENDED if not already A layout
+  [A2]  Set up pnpm workspaces + Turborepo
+    [A3]  Configure shared packages (packages/api-spec,
+          packages/shared-config)
+  [A4]  Add root-level tooling (ESLint, Prettier, lint-staged,
+          commit hooks, Husky)
+  [A5]  None in this group
+```
+
+---
+
+#### GROUP 2 — Local Development Environment
+
+```text
+  [B1]  Set up Docker Compose for local development
+          (database, services, message queues)                    ← RECOMMENDED
+  [B2]  Add LocalStack for AWS service emulation
+          (SQS, SNS, S3, SSM, Secrets Manager)
+  [B3]  Add MSW (Mock Service Worker) for frontend API mocking
+  [B4]  Configure environment variable management
+          (.env files, .env.example, secret rotation guidance)
+  [B5]  Add dev server startup scripts and README instructions
+  [B6]  None in this group
+```
+
+---
+
+#### GROUP 3 — API Contract & Documentation
+
+```text
+  [C1]  Adopt OpenAPI-first approach — generate spec from
+          existing code, then enforce spec-first going forward    ← RECOMMENDED if no spec
+  [C2]  Add auto-generated types from OpenAPI spec
+          (frontend TypeScript types, backend DTOs)
+  [C3]  Add Swagger UI / API documentation endpoint
+  [C4]  Implement RFC 7807 structured error responses
+  [C5]  Add API versioning strategy
+  [C6]  None in this group
+```
+
+---
+
+#### GROUP 4 — Authentication & Authorization
+
+```text
+  [D1]  Audit existing auth implementation and fix gaps
+  [D2]  Implement RBAC (role-based access control) model
+  [D3]  Protect all API routes (require auth on every endpoint)
+  [D4]  Protect all frontend routes (auth guards / middleware)
+  [D5]  Add refresh token / session expiry handling
+  [D6]  None in this group
+```
+
+---
+
+#### GROUP 5 — Code Quality
+
+```text
+  [E1]  Add ESLint + Prettier (frontend)                         ← RECOMMENDED
+  [E2]  Add ESLint + TypeScript strict checks (backend)         ← RECOMMENDED
+  [E3]  Add pre-commit hooks (lint-staged + Husky)
+  [E4]  Add SonarQube / SonarCloud configuration
+  [E5]  Add code coverage thresholds and enforcement
+  [E6]  Refactor to eliminate known anti-patterns
+          (detected during scan)
+  [E7]  None in this group
+```
+
+---
+
+#### GROUP 6 — Testing
+
+```text
+  [F1]  Add unit tests — frontend (Jest / Vitest)               ← RECOMMENDED
+  [F2]  Add unit tests — backend (JUnit 5 / pytest / Jest)      ← RECOMMENDED
+  [F3]  Add integration tests (TestContainers / Supertest)
+  [F4]  Add end-to-end tests (Playwright)
+  [F5]  Add performance / load tests (k6 / Gatling / Locust)
+  [F6]  Add test data factories and fixtures
+  [F7]  Configure coverage reporting (codecov / lcov)
+  [F8]  None in this group
+```
+
+---
+
+#### GROUP 7 — Security
+
+```text
+  [G1]  Run OWASP security audit and remediate findings          ← RECOMMENDED
+  [G2]  Add dependency vulnerability scanning (OWASP Dep-Check,
+          npm audit, pip-audit, Trivy)
+  [G3]  Configure CORS, CSRF, security headers (Helmet, Spring)
+  [G4]  Add secrets management (AWS Secrets Manager /
+          Parameter Store / Vault)
+  [G5]  Add rate limiting and abuse prevention
+  [G6]  None in this group
+```
+
+---
+
+#### GROUP 8 — Database
+
+```text
+  [H1]  Add database migration tooling (Prisma Migrate /
+    TypeORM / Alembic / SQL-first scripts)                 ← RECOMMENDED if none detected
+  [H2]  Add sample/seed data migration changesets
+  [H3]  Review schema for indexing and query performance
+  [H4]  Add soft-delete and audit trail columns
+  [H5]  None in this group
+```
+
+---
+
+#### GROUP 9 — Observability & Monitoring
+
+```text
+  [I1]  Add structured logging with correlation IDs
+  [I2]  Add health check endpoints (/health, /ready)
+  [I3]  Set up distributed tracing (OpenTelemetry / X-Ray)
+  [I4]  Configure CloudWatch / Datadog / Grafana alerting
+  [I5]  Add business event logging (audit trail)
+  [I6]  None in this group
+```
+
+---
+
+#### GROUP 10 — Infrastructure & Deployment
+
+```text
+  [J1]  Create Docker images for all services
+  [J2]  Add infrastructure-as-code (AWS CDK / Terraform)
+  [J3]  Set up CI/CD pipeline (GitHub Actions)                  ← RECOMMENDED
+  [J4]  Add deployment configuration per environment
+          (dev / staging / prod)
+  [J5]  Add rollback strategy and runbook
+  [J6]  None in this group
+```
+
+---
+
+#### GROUP 11 — UI/UX Quality
+
+```text
+  [K1]  Audit UI against WCAG 2.1 AA accessibility standards
+  [K2]  Add responsive design and mobile-first layout
+  [K3]  Add loading states, error boundaries, and empty states
+  [K4]  Implement consistent design token system
+          (colours, typography, spacing)
+  [K5]  Add UI component library / storybook documentation
+  [K6]  None in this group
+```
+
+---
+
+#### GROUP 12 — Documentation
+
+```text
+  [L1]  Generate technical architecture documentation
+  [L2]  Generate API usage documentation
+  [L3]  Generate onboarding guide for new developers
+  [L4]  Generate Architecture Decision Records (ADRs) for
+          key existing decisions
+  [L5]  Generate Requirements Traceability Matrix
+  [L6]  None in this group
+```
+
+---
+
+### 3c: Collect selections
+
+After the user responds, record SELECTED_FEATURES as the list of chosen option codes.
+
+If the user selects `ALL`, activate all options across all groups.
+
+Confirm the selection list before continuing:
+
+```text
+You selected: [list all codes and descriptions]
+
+  [A]  Confirmed — proceed to detail collection
+  [B]  Revise — let me change some selections
+```
+
+---
+
+## Phase 4 — Detail Collection & Ambiguity Review
+
+### 4a: Targeted follow-up questions
+
+Ask targeted questions only for selected feature groups. Do NOT ask about groups
+not selected. Present all questions with options — never open-ended.
+
+> **Rule**: Every question must have a recommended option, numbered/lettered choices,
+> and a plain-text fallback option [T]. See `@.claude/agents/ambiguity-analyst.md`
+> for options presentation rules.
+
+---
+
+**If B1 (Docker Compose) selected:**
+
+```text
+Q-B1a: Which services should Docker Compose run locally?
+  [1]  Database only (PostgreSQL / MySQL / MongoDB)              ← DEFAULT
+  [2]  Database + message broker (Kafka / RabbitMQ / SQS)
+  [3]  Database + cache (Redis)
+  [4]  Full stack (DB + broker + cache + all app services)
+  [T]  Specify services in plain text
+
+Q-B1b: Should app services also run in Docker, or only dependencies?
+  [1]  Dependencies only — apps run natively (npm/mvn/python)   ← RECOMMENDED
+  [2]  Full Docker environment — all services in containers
+  [T]  Describe your preference
+```
+
+---
+
+**If B2 (LocalStack) selected:**
+
+```text
+Q-B2: Which AWS services do you need locally?
+  [1]  SQS + SNS only
+  [2]  SQS + SNS + S3 + SSM
+  [3]  SQS + SNS + S3 + SSM + Secrets Manager + DynamoDB       ← RECOMMENDED
+  [4]  Custom set
+  [T]  List the services you need
+```
+
+---
+
+**If C1 (OpenAPI-first) selected and no spec was found:**
+
+```text
+Q-C1: How should we generate the initial OpenAPI spec?
+  [1]  Reverse-engineer from existing routes / controllers       ← RECOMMENDED
+  [2]  Start from scratch — design spec before reviewing code
+  [3]  Import existing spec from another location
+  [T]  Describe your approach
+```
+
+---
+
+**If D1/D2 (Auth / RBAC) selected:**
+
+```text
+Q-D1: What authentication provider does (or will) this app use?
+  [1]  PingID (PPCC enterprise SSO)                              ← RECOMMENDED for PPCC apps
+  [2]  Auth0
+  [3]  Keycloak (self-hosted)
+  [4]  AWS Cognito
+  [5]  Firebase Auth
+  [6]  Custom JWT (own auth service)
+  [T]  Different provider — specify name and protocol
+
+Q-D2: Should all routes be protected by default?
+  [1]  Yes — all routes require auth; exceptions explicitly listed ← RECOMMENDED
+  [2]  No — public routes by default; protection opt-in
+  [T]  Describe your policy
+```
+
+---
+
+**If F1–F4 (Testing) selected:**
+
+```text
+Q-F1: What is the target test coverage threshold?
+  [1]  60% — basic coverage floor
+  [2]  80% — standard quality floor                             ← RECOMMENDED
+  [3]  90% — high-assurance coverage
+  [4]  Custom threshold
+  [T]  Describe your coverage strategy
+
+Q-F2: Do you use (or want to use) test containers for integration tests?
+  [1]  Yes — spin up real database for integration tests        ← RECOMMENDED
+  [2]  Yes, but with H2 in-memory database instead
+  [3]  No — use mocks only
+  [T]  Describe your approach
+```
+
+---
+
+**If G4 (Secrets Management) selected:**
+
+```text
+Q-G4: How are secrets stored and injected today?
+  [1]  AWS Secrets Manager / Parameter Store (already in place)
+  [2]  Environment variables locally, SSM in production
+  [3]  Currently hardcoded or in .env files (needs migration)
+  [4]  Vault or similar self-hosted solution
+  [T]  Describe current approach and target approach
+```
+
+---
+
+**If H1 (Database migrations) selected and none detected:**
+
+```text
+Q-H1: Which migration tool should be introduced?
+  [1]  Prisma Migrate (TypeScript/NestJS monorepo)              ← RECOMMENDED
+  [2]  TypeORM migrations (TypeScript)
+  [3]  Alembic (Python/SQLAlchemy)
+  [4]  SQL-first migration scripts
+  [T]  Different tool — specify
+```
+
+---
+
+**If J2 (Infrastructure-as-code) selected:**
+
+```text
+Q-J2: Which IaC tool should be used?
+  [1]  AWS CDK v2 (TypeScript)                                  ← RECOMMENDED for AWS
+  [2]  Terraform (HCL)
+  [3]  Pulumi (TypeScript)
+  [T]  Different tool — specify
+
+Q-J2b: Target cloud provider?
+  [1]  AWS
+  [2]  Azure
+  [3]  GCP
+  [T]  Other — specify
+```
+
+---
+
+**If J3 (CI/CD) selected:**
+
+```text
+Q-J3: Which CI/CD platform?
+  [1]  GitHub Actions                                           ← RECOMMENDED
+  [2]  GitLab CI/CD
+  [3]  Jenkins
+  [4]  Azure DevOps
+  [T]  Different platform — specify
+
+Q-J3b: What pipeline stages are needed?
+  [1]  Build + Test only (lean pipeline)
+  [2]  Build + Test + Lint + Security scan                      ← RECOMMENDED
+  [3]  Build + Test + Lint + Security + Deploy (full pipeline)
+  [T]  Describe the stages you need
+```
+
+---
+
+**Always ask (for all projects):**
+
+```text
+Q-GEN1: Are there any parts of the codebase the AI agent should NOT modify?
+  [1]  No restrictions — full access                            ← DEFAULT
+  [2]  Keep /legacy/ folder read-only
+  [3]  Keep generated code directories read-only
+  [T]  List specific paths or packages to exclude
+
+Q-GEN2: What is the primary deployment target environment?
+  [1]  AWS (Fargate / ECS)                                    ← DEFAULT
+  [2]  Azure (App Service / AKS / Functions)
+  [3]  GCP (Cloud Run / GKE)
+  [4]  On-premise / self-hosted
+  [5]  Kubernetes (cloud-agnostic)
+  [T]  Describe the environment
+
+Q-GEN3: How should tasks be prioritized if multiple goals compete?
+  [1]  Security first, then quality, then features              ← RECOMMENDED
+  [2]  Developer experience first (fast local dev, then testing)
+  [3]  User-visible quality first (UI, testing, docs)
+  [4]  Infrastructure first (local dev, CI/CD, Docker)
+  [T]  Describe your priority order
+```
+
+### 4b: Ambiguity review
+
+After collecting all answers, load `@.claude/agents/ambiguity-analyst.md` and run the
+ambiguity analyst over the collected information.
+
+The analyst should specifically check:
+
+1. Does the detected stack match the user's stated intent (any mismatches)?
+2. Are any of the selected features contradictory or hard to implement together?
+3. Are there implicit dependencies between selections that the user may not have considered?
+4. Are there gaps in the existing codebase that block certain selected features?
+5. Are there security risks from the detected stack that the user should know about?
+6. Is the auth approach clear and consistent across all selected features?
+7. Does the existing test setup conflict with the selected testing goals?
+8. Is the monorepo layout compatible with the CI/CD approach selected?
+
+Surface only questions where a wrong assumption would require rework. State safe
+assumptions and proceed.
+
+---
+
+## Phase 5 — Bootstrap Artifact Generation
+
+Phase 5 generates exactly **three files**. Do not produce any additional files.
+
+---
+
+### 5a: Generate `docs/onboarding-tasks/0-tasks-index.md`
+
+This is the master tracker. It serves two purposes:
+
+1. A persistent status registry for all planned onboarding tasks
+2. The project context store that `create-tasks.md` reads each time it generates tasks
+
+Write the file using this structure:
+
+````markdown
+# Onboarding Task Registry
+
+Project: [Project Name]
+Initialized: [Date]
+Framework: Claude AI Enterprise Framework
+
+---
+
+## How to Use
+
+1. Run `docs/onboarding-tasks/create-tasks.md` as a prompt to generate the next
+   batch of task files. It reads this file and produces ~3 task files per run.
+2. After each run, review the generated task files, then mark them `task-generated`
+   in the Task Registry below.
+3. Implement each task file in order:
+   `/implement-epic docs/onboarding-tasks/task-NNN-<name>.md`
+4. Mark task `complete` here after verification.
+5. Run `create-tasks.md` again for the next batch.
+
+Status values: `pending` → `task-generated` → `complete`
+
+---
+
+## Project Context
+
+> This section is read by `create-tasks.md` when generating task files.
+> It must contain enough detail for the agent to generate self-sufficient tasks
+> without needing to ask questions or re-scan the codebase.
+
+### Technology Profile
+
+[Paste the confirmed Technology Profile from Phase 2 in full]
+
+### Codebase Layout
+
+- Monorepo layout: [A / B / C / D / E / F + description]
+- Root: [project root path]
+- Frontend: [path, if present]
+- Backend: [path, if present]
+- Infrastructure: [path, if present]
+- Read-only paths: [list from Q-GEN1, or “none”]
+
+### Selected Improvements
+
+[List every selected option code and description, one per line]
+
+Example:
+- B1: Set up Docker Compose (PostgreSQL + Redis; dependencies-only mode)
+- C1: Adopt OpenAPI-first (reverse-engineer from existing controllers)
+- F1: Add frontend unit tests (Jest, 80% coverage target)
+- F2: Add backend unit tests (JUnit 5, 80% coverage target)
+- J3: Set up GitHub Actions CI/CD (Build + Test + Lint + Security)
+
+### Answers to Detail Questions
+
+[Record every Q-* answer from Phase 4a, verbatim]
+
+Example:
+- Q-B1a: Database + cache (Redis)
+- Q-B1b: Dependencies-only (apps run natively)
+- Q-D1: PingID
+- Q-D2: All routes protected by default
+- Q-F1: 80% coverage threshold
+- Q-F2: TestContainers for integration tests
+- Q-GEN1: No restrictions
+- Q-GEN2: AWS (Fargate / ECS)
+- Q-GEN3: Security first, then quality, then features
+
+### Ambiguity Findings & Decisions
+
+[Summarize any ambiguities surfaced in Phase 4b and how they were resolved]
+
+### Constraints
+
+[Any project-specific constraints, conventions, or instructions from the user]
+
+---
+
+## Task Registry
+
+| #   | Task Title                            | Status  | Groups        | Dependencies |
+|-----|---------------------------------------|---------|---------------|--------------|
+| 001 | [Title]                               | pending | [codes]       | none         |
+| 002 | [Title]                               | pending | [codes]       | 001          |
+| ... | ...                                   | ...     | ...           | ...          |
+| NNN | Generate epic tracker                 | pending | —             | all prior    |
+| N+1 | Framework alignment                   | pending | —             | all prior    |
+
+### Task Planning Notes
+
+[Brief rationale for the task sequence and any grouping decisions.]
+[If total tasks > 10: note which tasks were grouped and why.]
+````
+
+#### Task registry planning rules
+
+- List ALL planned tasks (including epic tracker seeding and framework alignment)
+  in dependency order.
+- The **second-to-last** task is always: `Generate epic tracker (specs/epics/0-epics-index.md)`
+- The **last** task is always: `Framework alignment (.claude/ updates)`
+- **Grouping rule**: If the total planned task count exceeds 10, try to group
+  closely related tasks into a single task where they share the same dependency and
+  can be implemented atomically. Grouping is a judgment call — do not force it if
+  tasks genuinely need to be separate. Record grouping decisions in Task Planning Notes.
+- Each task in the registry gets a `Groups` column listing the improvement codes
+  (e.g., `E1, E2, E3`) it covers, for traceability back to selected improvements.
+
+---
+
+### 5b: Generate `docs/onboarding-tasks/create-tasks.md`
+
+This file is a self-contained prompt. When it is run as a prompt in a new AI session,
+it reads `0-tasks-index.md`, proposes the next batch of pending tasks to generate, and
+produces self-sufficient `task-NNN-*.md` files.
+
+Write the file with the following structure. Fill in all `[...]` placeholders using
+the actual project data collected during Phases 1–4.
+
+````markdown
+# Create Onboarding Tasks
+
+> **HOW TO USE**: Run this file as a prompt in a fresh AI session.
+> The agent will read `docs/onboarding-tasks/0-tasks-index.md`, identify the next
+> pending tasks, and generate task files for them.
+
+---
+
+## Context
+
+This prompt is part of the onboarding of **[Project Name]** into the Claude AI
+framework. The project has been analyzed and a full task plan recorded in
+`docs/onboarding-tasks/0-tasks-index.md`. Individual task files are generated
+incrementally to avoid token overflow.
+
+**Framework reference**: `@.claude/CLAUDE.md`
+
+---
+
+## Step 1 — Read the Tracker
+
+Read `docs/onboarding-tasks/0-tasks-index.md` in full. Extract:
+
+1. The **Project Context** section (Technology Profile, layout, selections, answers,
+   constraints) — this is the source of truth for task content.
+2. The **Task Registry** — identify all rows with status `pending`.
+
+---
+
+## Step 2 — Propose Next Batch
+
+From the `pending` tasks, select the next batch to generate. Default batch size: **3**.
+Always respect task dependencies: only propose tasks whose dependencies are `complete`
+or `task-generated`.
+
+Present the proposal:
+
+```text
+Next tasks to generate:
+
+  [NNN] [Task Title]  (Groups: [codes])  Dependencies: [deps]
+  [NNN] [Task Title]  (Groups: [codes])  Dependencies: [deps]
+  [NNN] [Task Title]  (Groups: [codes])  Dependencies: [deps]
+
+  [A]  Generate these 3
+  [B]  Choose a different number (specify)
+  [C]  Skip one of these (specify which)
+```
+
+Wait for user confirmation before generating files.
+
+---
+
+## Step 3 — Generate Task Files
+
+For each confirmed task, create `docs/onboarding-tasks/task-[NNN]-[kebab-title].md`.
+
+Each task file MUST be self-contained — a fresh AI agent with no prior conversation
+history must be able to implement it correctly using only:
+- The task file itself
+- The files it explicitly references
+
+### Task File Format
+
+Use this exact structure for every generated task file:
+
+```markdown
+# Task [NNN] — [Title]
+
+**Status**: pending
+**Groups**: [improvement codes this task covers]
+**Dependencies**: [task file names that must be complete first, or “none”]
+**Estimated Size**: S / M / L
+
+## Project Context
+
+[2–4 paragraphs describing the current state of the project RELEVANT TO THIS TASK.
+Copied/adapted from 0-tasks-index.md — Project Context section.
+Include: relevant tech stack, relevant existing code patterns, what is already
+implemented vs. what this task needs to add. Do NOT include context irrelevant
+to this specific task.]
+
+## Goal
+
+[Single clear statement of what this task achieves.]
+
+## Requirements
+
+### Functional Requirements
+
+- [What must be implemented — specific and testable]
+
+### Non-Functional Requirements
+
+- [Performance, security, maintainability constraints]
+- Coverage: [threshold from Q-F1, if applicable]
+
+### Constraints
+
+- [Read-only paths from Q-GEN1]
+- [Any project-specific do-nots]
+- Do NOT modify generated code directories
+
+## Implementation Steps
+
+1. [Step one — specific enough that the agent does not need to guess]
+2. [Step two]
+   ...
+
+## Validation & Testing
+
+> This section is REQUIRED. Every task must describe how to verify it succeeded.
+
+### Tests to Write
+
+- [ ] [Test description and file to create/modify]
+
+### Commands to Run
+
+```bash
+# [Verification commands: build, test, lint]
+```
+
+### Expected Outcomes
+
+- [ ] [What passing looks like — specific, not generic]
+
+### If Tests Fail
+
+[Instructions for common failure modes and how to fix them.]
+
+## Acceptance Criteria
+
+- [ ] [Testable criterion 1]
+- [ ] [Testable criterion 2]
+  ...
+
+## Definition of Done
+
+- [ ] All acceptance criteria met
+- [ ] All validation commands pass without errors
+- [ ] No new lint errors introduced
+- [ ] Task status updated to `complete` in `docs/onboarding-tasks/0-tasks-index.md`
+```
+
+---
+
+## Step 4 — Update the Tracker
+
+After generating each task file, update its row in
+`docs/onboarding-tasks/0-tasks-index.md`:
+
+- Change status from `pending` to `task-generated`
+- Confirm the file name in the row (or add it as a note)
+
+---
+
+## Step 5 — Report and Prompt for Next Run
+
+After generating all tasks in the batch, print:
+
+```text
+────────────────────────────────────────────────────────────────
+Batch complete.
+
+Generated:
+  [list of task files just created]
+
+Updated: docs/onboarding-tasks/0-tasks-index.md
+  [NNN tasks remaining with status ‘pending’]
+
+Next step:
+  • Implement the generated tasks in order:
+      /implement-epic docs/onboarding-tasks/task-NNN-<name>.md
+  • Run this prompt again when ready for the next batch:
+      docs/onboarding-tasks/create-tasks.md
+────────────────────────────────────────────────────────────────
+```
+
+---
+
+## Special Task Instructions
+
+### Generate Epic Tracker (always second-to-last task)
+
+When generating the `task-NNN-generate-epic-tracker.md` file, the task must instruct
+the agent to:
+
+1. Re-scan the fully onboarded codebase (after all prior tasks complete)
+2. Identify all implemented features by examining controllers/routes, pages/components,
+   DB migrations, auth rules, infrastructure
+3. Map each feature group to a proposed epic title with brief summary
+4. Present the proposed epic list to the user for confirmation before writing
+5. Generate `specs/epics/0-epics-index.md` following the canonical format from
+   `@.claude/workflows/epic-based-development.md`
+   - All discovered implemented features → status `complete`
+   - Any planned/pending features → status `pending`
+6. Acceptance criteria: `specs/epics/0-epics-index.md` exists, `/add-feature` can be used
+
+### Framework Alignment (always last task)
+
+When generating the `task-NNN-framework-alignment.md` file, the task must instruct
+the agent to:
+
+1. Read `@.claude/CLAUDE.md` for the full framework inventory
+2. Check each category (standards, agents, patterns, workflows, templates) for gaps
+   vs. the actual project stack (from the Technology Profile in `0-tasks-index.md`)
+3. Report findings as a gap table: Area | File | Issue | Recommendation
+4. Ask user which gaps to address before making changes
+5. Apply confirmed changes surgically (add/update/remove `.claude/` files)
+6. Run `sync-project-structure` to update `.claude/project-structure.md`
+7. Update `.claude/CLAUDE.md` and `.claude/README.md` counts if files were added
+````
+
+---
+
+### 5c: Generate `docs/onboarding-tasks/onboarding-guide.md`
+
+Generate the onboarding guide immediately (not as a task). Use this structure:
+
+````markdown
+# Onboarding Guide — [Project Name]
+
+Generated: [Date]
+Framework: Claude AI Enterprise Framework
+
+## Quick Start (AI-Guided — Recommended)
+
+The onboarding is managed through a set of task files. To start:
+
+1. **Generate task files** (run ~3 at a time to stay within token limits):
+   Open `docs/onboarding-tasks/create-tasks.md` as a prompt and run it.
+
+2. **Implement each task** in order:
+   `/implement-epic docs/onboarding-tasks/task-NNN-<name>.md`
+
+3. **Repeat**: run `create-tasks.md` again for the next batch until all tasks
+   are `complete` in `docs/onboarding-tasks/0-tasks-index.md`.
+
+4. **Add features**: once onboarding is complete and `specs/epics/0-epics-index.md`
+   exists, use `/add-feature` to grow the project.
+
+## Manual Quick Start (Alternative)
+
+> Use this only if you prefer a manual setup.
+
+### Prerequisites
+
+[List: detected language runtimes, required versions, install links]
+
+### Install Dependencies
+
+[Commands to install all dependencies — derived from detected stack]
+
+### Start Local Environment
+
+[Docker Compose command, env var setup]
+
+### Run the Application
+
+[Commands to start frontend, backend]
+
+### Run Tests
+
+[Commands for unit, integration, E2E tests]
+
+### Access the Application
+
+[URLs: app, API, Swagger UI, LocalStack dashboard, etc.]
+
+## Task Overview
+
+All planned tasks are listed in `docs/onboarding-tasks/0-tasks-index.md`.
+Task files are generated incrementally by running `create-tasks.md` as a prompt.
+
+## Framework Reference
+
+| Resource | Path |
+|----------|------|
+| Full command catalog | `.claude/CLAUDE.md` |
+| Standards | `.claude/standards/` |
+| Workflows | `.claude/workflows/` |
+| Task tracker | `docs/onboarding-tasks/0-tasks-index.md` |
+| Task generator | `docs/onboarding-tasks/create-tasks.md` |
+| Epic tracker (post-onboarding) | `specs/epics/0-epics-index.md` |
+````
+
+---
+
+## Final Output Summary
+
+After Phase 5 is complete, print:
+
+```text
+────────────────────────────────────────────────────────────────
+  /initialize — Complete
+────────────────────────────────────────────────────────────────
+
+Generated:
+  docs/onboarding-tasks/0-tasks-index.md    ← task registry + full project context
+  docs/onboarding-tasks/create-tasks.md     ← incremental task generator prompt
+  docs/onboarding-tasks/onboarding-guide.md ← quickstart reference
+
+Planned tasks: [N total, all status: pending]
+
+Next steps:
+  1. Generate the first batch of task files:
+       Open docs/onboarding-tasks/create-tasks.md as a prompt and run it.
+       It will propose 3 tasks, generate the files, and update the tracker.
+
+  2. Implement each generated task in order:
+       /implement-epic docs/onboarding-tasks/task-001-<name>.md
+
+  3. Repeat: run create-tasks.md again for the next batch.
+
+  4. After all tasks complete, use /add-feature to grow the project:
+       /add-feature "your next feature description"
+
+For help:
+  /help initialize         ← this command
+  /help add-feature        ← adding features after onboarding
+  .claude/CLAUDE.md        ← full framework reference
+────────────────────────────────────────────────────────────────
+```
+
+---
+
+## Guardrails
+
+- Do NOT scan or modify `.claude/` during Phases 1–4 (only read it in Phase 3 for
+  capability reference). Framework alignment is deferred to a generated task file.
+- Do NOT generate individual `task-NNN-*.md` files during `/initialize`. The entire
+  task generation workload is deferred to `create-tasks.md`.
+- Phase 5 generates exactly three files: `0-tasks-index.md`, `create-tasks.md`,
+  and `onboarding-guide.md`. No other files are created.
+- If `docs/onboarding-tasks/0-tasks-index.md` already exists, treat the run as a
+  **wizard re-run**: show a warning and ask whether to overwrite or abort.
+- If `specs/epics/0-epics-index.md` already exists, note it in `0-tasks-index.md`
+  and skip the epic tracker seeding task from the registry.
+- Respect user-specified read-only paths (Q-GEN1 answer) — record them in
+  `0-tasks-index.md` under Project Context → Constraints, so `create-tasks.md`
+  propagates them into every generated task file.
+
+---
+
+## Error Recovery
+
+If at any point the wizard cannot proceed (e.g., codebase is too large to scan,
+required files are missing, user gives contradictory answers), stop and report:
+
+```text
+  ⚠ Wizard paused at Phase N — [reason]
+
+  To resume:
+    [specific instruction for the user to unblock]
+
+  To restart from the beginning:
+    /initialize
+```

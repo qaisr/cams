@@ -1,0 +1,227 @@
+/*
+ * PPCC document theme — pandoc standalone HTML + Chrome-print PDF.
+ * Used by /export for --to html and --to pdf (HTML is the print source).
+ * Tokens mirror @.claude/standards/ppcc-brand.md — keep in sync.
+ * Approximated from public PPCC brand identity; replace hexes/logo when
+ * official assets are available.
+ */
+
+:root {
+  --ppcc-yellow: #fcc016;
+  --ppcc-yellow-deep: #e5a800;
+  --ppcc-black: #000000;
+  --ppcc-ink: #1a1a1a;
+  --ppcc-white: #ffffff;
+  --ppcc-grey-900: #2d2d2d;
+  --ppcc-grey-600: #595959;
+  --ppcc-grey-300: #cccccc;
+  --ppcc-grey-100: #f4f4f4;
+  --ppcc-accent-teal: #008a8c;
+  --ppcc-accent-red: #c8102e;
+
+  --font-sans: 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+}
+
+/* ---------- Base ---------- */
+html {
+  font-size: 16px;
+}
+body {
+  font-family: var(--font-sans);
+  color: var(--ppcc-ink);
+  background: var(--ppcc-white);
+  line-height: 1.45;
+  max-width: 52rem;
+  margin: 0 auto;
+  padding: 2rem 1.5rem 3rem;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* ---------- Headings ---------- */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  color: var(--ppcc-grey-900);
+  font-weight: 700;
+  line-height: 1.25;
+  margin: 1.6em 0 0.5em;
+}
+h1 {
+  font-size: 2rem;
+  border-bottom: 3px solid var(--ppcc-yellow);
+  padding-bottom: 0.25em;
+}
+h2 {
+  font-size: 1.5rem;
+  border-bottom: 2px solid var(--ppcc-yellow);
+  padding-bottom: 0.2em;
+}
+h3 {
+  font-size: 1.25rem;
+}
+h4 {
+  font-size: 1.1rem;
+}
+h5,
+h6 {
+  font-size: 1rem;
+  color: var(--ppcc-grey-600);
+}
+
+/* ---------- Text elements ---------- */
+p,
+li {
+  font-size: 1rem;
+}
+a {
+  color: var(--ppcc-yellow-deep);
+  text-decoration: underline;
+}
+strong {
+  color: var(--ppcc-grey-900);
+}
+blockquote {
+  margin: 1.2em 0;
+  padding: 0.6em 1em;
+  border-left: 4px solid var(--ppcc-yellow);
+  background: var(--ppcc-grey-100);
+  color: var(--ppcc-grey-900);
+}
+hr {
+  border: 0;
+  border-top: 1px solid var(--ppcc-grey-300);
+  margin: 2em 0;
+}
+
+/* ---------- Code ---------- */
+code {
+  font-family: var(--font-mono);
+  background: var(--ppcc-grey-100);
+  padding: 0.1em 0.35em;
+  border-radius: 3px;
+  font-size: 0.9em;
+}
+pre {
+  background: var(--ppcc-grey-100);
+  border: 1px solid var(--ppcc-grey-300);
+  border-radius: 4px;
+  padding: 1em;
+  overflow-x: auto;
+  page-break-inside: avoid;
+}
+pre code {
+  background: none;
+  padding: 0;
+}
+
+/* ---------- Tables ---------- */
+table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1.2em 0;
+  font-size: 0.92rem;
+}
+th,
+td {
+  border: 1px solid var(--ppcc-grey-300);
+  padding: 0.5em 0.7em;
+  text-align: left;
+  vertical-align: top;
+}
+thead th {
+  background: var(--ppcc-grey-900);
+  color: var(--ppcc-white);
+  font-weight: 600;
+}
+tbody tr:nth-child(even) {
+  background: var(--ppcc-grey-100);
+}
+
+/* ---------- Figures / diagrams ---------- */
+img,
+svg {
+  max-width: 100%;
+  height: auto;
+}
+figure {
+  margin: 1.4em 0;
+  text-align: center;
+}
+figcaption {
+  font-size: 0.85rem;
+  color: var(--ppcc-grey-600);
+  margin-top: 0.4em;
+}
+
+/* ---------- Title block (first h1 + subtitle) ---------- */
+.title-page {
+  min-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  page-break-after: always;
+}
+.title-page .subtitle {
+  color: var(--ppcc-grey-600);
+  font-size: 1.15rem;
+}
+.title-page .brand-bar {
+  height: 8px;
+  width: 120px;
+  background: var(--ppcc-yellow);
+  margin: 1rem 0;
+}
+
+/* ---------- Print / PDF ---------- */
+@page {
+  size: A4;
+  margin: 20mm;
+  @bottom-left {
+    content: string(doctitle);
+    font-size: 8pt;
+    color: #595959;
+  }
+  @bottom-right {
+    content: 'Page ' counter(page) ' of ' counter(pages);
+    font-size: 8pt;
+    color: #595959;
+  }
+}
+@media print {
+  body {
+    max-width: none;
+    padding: 0;
+    color: #1a1a1a;
+  }
+  h1 {
+    string-set: doctitle content();
+  }
+  h1,
+  h2,
+  h3 {
+    page-break-after: avoid;
+  }
+  tr,
+  img,
+  svg,
+  figure,
+  pre,
+  blockquote {
+    page-break-inside: avoid;
+  }
+  a {
+    color: var(--ppcc-ink);
+  }
+  /* Print external URLs as footnote-style text next to the link */
+  a[href^='http']::after {
+    content: ' (' attr(href) ')';
+    font-size: 0.75em;
+    color: var(--ppcc-grey-600);
+    word-break: break-all;
+  }
+}

@@ -1,0 +1,38 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: app_local
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  localstack:
+    image: localstack/localstack:latest
+    ports:
+      - '4566:4566'
+    environment:
+      SERVICES: secretsmanager,ssm,events,logs
+      AWS_DEFAULT_REGION: ap-southeast-2
+      DOCKER_HOST: unix:///var/run/docker.sock
+    volumes:
+      - localstack_data:/var/lib/localstack
+      - ./localstack/init-aws.sh:/etc/localstack/init/ready.d/init-aws.sh
+      - /var/run/docker.sock:/var/run/docker.sock
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:4566/_localstack/health']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+  localstack_data:

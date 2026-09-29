@@ -1,0 +1,82 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "ui": "tui",
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "inputs": ["src/**", "tsconfig*.json", "nest-cli.json", "next.config.*"],
+      "outputs": ["dist/**", ".next/**", "!.next/cache/**"]
+    },
+    "dev": {
+      "dependsOn": ["^build"],
+      "cache": false,
+      "persistent": true
+    },
+    "start": {
+      "dependsOn": ["build"],
+      "cache": false
+    },
+    "test": {
+      "dependsOn": ["^build"],
+      "inputs": ["src/**", "test/**", "jest.config.*", "tsconfig*.json"],
+      "outputs": ["coverage/**"],
+      "cache": false
+    },
+    "test:integration": {
+      "dependsOn": ["^build"],
+      "cache": false,
+      "env": ["DATABASE_URL", "NODE_ENV"]
+    },
+    "test:e2e": {
+      "dependsOn": ["^build"],
+      "cache": false,
+      "env": ["NEXT_PUBLIC_API_BASE_URL", "NODE_ENV"]
+    },
+    "test:api": {
+      "dependsOn": ["^build"],
+      "cache": false
+    },
+    "test:coverage": {
+      "dependsOn": ["^build"],
+      "outputs": ["coverage/**"],
+      "cache": false
+    },
+    "lint": {
+      "inputs": [
+        "src/**/*.{ts,tsx}",
+        "test/**/*.{ts,tsx}",
+        "eslint.config.*",
+        ".eslintrc.*",
+        "../../eslint.config.mjs"
+      ],
+      "outputs": [],
+      "cache": true
+    },
+    "lint:fix": {
+      "cache": false
+    },
+    "type-check": {
+      "dependsOn": ["^build"],
+      "inputs": ["src/**/*.{ts,tsx}", "tsconfig*.json"],
+      "outputs": [],
+      "cache": true
+    },
+    "clean": {
+      "cache": false
+    },
+    "depcheck": {
+      "cache": false
+    },
+    "generate": {
+      "inputs": ["prisma/schema.prisma", "openapi/**/*.yaml"],
+      "outputs": [
+        "generated/**",
+        "src/hooks/generated/**",
+        "src/mocks/generated/**"
+      ],
+      "cache": true
+    }
+  },
+  "globalEnv": ["NODE_ENV", "CI"],
+  "globalPassThroughEnv": ["AWS_REGION", "AWS_ENDPOINT_URL"]
+}

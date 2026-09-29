@@ -1,0 +1,59 @@
+# .claude/config/confluence-sync.config.yml
+# ---------------------------------------------------------------------------
+# Confluence citation-cache mirror configuration (plan 01c).
+#
+# This file is READ AS INSTRUCTION CONTEXT by the /confluence command family
+# and the confluence-search agent — it is NOT parsed by a compiled TS pipeline,
+# so no YAML runtime dependency is added. Commands read the values below and
+# pass them to the Phase-3 TS scripts as function arguments (mirrors how
+# jira-sync.config.yml feeds the /jira pipeline).
+#
+# The local mirror under confluence/ is a CACHE, not the search index. Discovery
+# is Rovo-first (live search via the atlassian MCP); the mirror caches the pages
+# a citation actually references. Nothing here is pulled until Phase 3.
+# ---------------------------------------------------------------------------
+
+# Confluence tenant. cloudId is pinned here ONCE and never hardcoded elsewhere.
+cloudId: '998e78d7-2a66-4fc0-809b-b43b4232d4b8'
+site: 'commbank.atlassian.net'
+
+# --- Staleness (mirrors jira-sync.config.yml §5.4) ---------------------------
+# The confluence-search agent warns and offers a sync if _index.json.lastSyncedAt
+# is older than this. reindex is offline and does NOT reset the clock.
+stalenessHours: 24
+
+# Pull inline + footer comments alongside each page body when caching (Phase 3).
+pullComments: true
+
+# --- Batched large-scale sync (see "Batched large-scale sync" in confluence-sync.md)
+# When a `/confluence-sync --pull` roster scan finds MORE THAN largeSyncThreshold
+# pages actually PENDING (status_sync in {remote-ahead, new}), the command switches
+# to batched mode: it plans a queue, writes a durable confluence/.pull-runs/<run_id>.json
+# tracker, and spawns ONE fresh subagent per batch so no single Claude context has to
+# hold every page body (the 44-page overflow this fixes). Evaluated on PENDING work,
+# NOT raw roster size — a large folder where only a few pages changed pulls inline.
+largeSyncThreshold: 15 # pending-page count above which batched mode engages
+maxBatchPages: 8 # max pages per batch; a larger branch is split into chunks
+
+# How an ambiguous/unknown alias is handled during identity resolution.
+# Mirrors people.json — 'ask' triggers a clarifying question rather than a guess.
+unresolvedAliasPolicy: 'ask'
+
+# --- Spaces in scope ----------------------------------------------------------
+# SEC  = "CITB Solution — Entity onboarding" (home space; pages 2097876103, 2127187669)
+# PCON = "CommBiz Reinvented — Admin Hub 2.0 — Party Credentials Management"
+#        (page 2042342654; related 1332713924 "CommBiz User Onboarding")
+# Optional per-space narrowing (labels / ancestors) is applied by later pulls
+# (Phase 3); left commented until then so scope stays broad-by-default.
+spaces:
+  - key: SEC
+    # labels: []
+    # ancestors: []
+  - key: SEC
+    # "EON Squad" folder — every page/sub-page under this ancestor is in-scope
+    # for this squad; unlike the broad SEC entry above (selective pulls only),
+    # this scope is pulled in full.
+    ancestors: [2083293743]
+  - key: PCON
+    # labels: []
+    # ancestors: []

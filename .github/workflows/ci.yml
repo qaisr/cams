@@ -1,0 +1,306 @@
+# Triggered on every PR and push to main/develop
+# Fast feedback — lint, type-check, unit tests, build
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true # Cancel superseded runs on same branch
+
+env:
+  NODE_VERSION: '20'
+  PNPM_VERSION: '9'
+  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }} # Remote cache — skip unchanged tasks
+  TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+
+jobs:
+  # ── Job 1: Install + cache ──────────────────────────────────────────────────
+  install:
+    name: Install Dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Cache node_modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            apps/*/node_modules
+            packages/*/node_modules
+          key: modules-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+
+  # ── Job 2: RBAC config schema validation ───────────────────────────────────
+  validate-rbac-schema:
+    name: Validate RBAC Config Schema
+    runs-on: ubuntu-latest
+    needs: install
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Restore node_modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            apps/*/node_modules
+            packages/*/node_modules
+          key: modules-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate RBAC config schema
+        run: npx ajv-cli validate -s packages/shared-config/rbac/rbac-group-permissions.schema.json -d packages/shared-config/rbac/rbac-group-permissions.json
+
+  # ── Job 3: Generation pipeline ─────────────────────────────────────────────
+  generate:
+    name: Generation Pipeline
+    runs-on: ubuntu-latest
+    needs: install
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Restore node_modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            apps/*/node_modules
+            packages/*/node_modules
+          key: modules-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run generation pipeline
+        run: pnpm generate
+        env:
+          DATABASE_URL: postgresql://placeholder:placeholder@localhost:5432/placeholder
+
+      - name: Verify no uncommitted generated files
+        run: |
+          if [ -n "$(git status --porcelain packages/database/generated packages/api-spec/generated apps/web/src/hooks/generated apps/web/src/mocks/generated)" ]; then
+            echo "❌ Generated files are out of sync. Run 'pnpm generate' and commit."
+            git diff --name-only
+            exit 1
+          fi
+          echo "✅ Generated files are up to date"
+
+  # ── Job 4: Lint + Format ────────────────────────────────────────────────────
+  lint:
+    name: Lint & Format
+    runs-on: ubuntu-latest
+    needs: install
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Restore node_modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            apps/*/node_modules
+            packages/*/node_modules
+          key: modules-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: ESLint
+        run: pnpm turbo run lint --cache-dir=.turbo
+
+      - name: Prettier check
+        run: pnpm format:check
+
+      - name: YAML lint
+        run: |
+          pip install yamllint --quiet
+          yamllint -c .yamllint .github/workflows/
+
+  # ── Job 5: Type check ───────────────────────────────────────────────────────
+  type-check:
+    name: TypeScript
+    runs-on: ubuntu-latest
+    needs: generate
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Restore node_modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            apps/*/node_modules
+            packages/*/node_modules
+          key: modules-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run generation pipeline
+        run: pnpm generate
+        env:
+          DATABASE_URL: postgresql://placeholder:placeholder@localhost:5432/placeholder
+
+      - name: Type check all workspaces
+        run: pnpm turbo run type-check --cache-dir=.turbo
+
+  # ── Job 6: Unit tests ───────────────────────────────────────────────────────
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    needs: generate
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Restore node_modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            apps/*/node_modules
+            packages/*/node_modules
+          key: modules-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run generation pipeline
+        run: pnpm generate
+        env:
+          DATABASE_URL: postgresql://placeholder:placeholder@localhost:5432/placeholder
+
+      - name: Run unit tests with coverage
+        run: pnpm turbo run test:coverage --cache-dir=.turbo
+
+      - name: Upload coverage reports
+        uses: codecov/codecov-action@v4
+        if: always()
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: |
+            apps/api/coverage/lcov.info
+            apps/web/coverage/lcov.info
+          flags: unit
+          fail_ci_if_error: false
+
+  # ── Job 7: Build verification ───────────────────────────────────────────────
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    needs: [lint, type-check, unit-tests]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Restore node_modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            apps/*/node_modules
+            packages/*/node_modules
+          key: modules-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run generation pipeline
+        run: pnpm generate
+        env:
+          DATABASE_URL: postgresql://placeholder:placeholder@localhost:5432/placeholder
+
+      - name: Build all workspaces
+        run: pnpm turbo run build --cache-dir=.turbo
+        env:
+          NEXT_PUBLIC_API_BASE_URL: https://api.example.com
+          NEXT_PUBLIC_APP_ENV: ci
+
+      - name: Cache build outputs
+        uses: actions/cache@v4
+        with:
+          path: |
+            apps/api/dist
+            apps/web/.next
+          key: build-${{ runner.os }}-${{ github.sha }}
+
+  # ── Job 7: Sonar gate (references sonar.yml) ────────
+  quality-gate:
+    name: Quality Gate Summary
+    runs-on: ubuntu-latest
+    needs: [lint, type-check, unit-tests, build]
+    if: always()
+    steps:
+      - name: Check all required jobs passed
+        run: |
+          results=( "${{ needs.lint.result }}" "${{ needs.type-check.result }}" "${{ needs.unit-tests.result }}" "${{ needs.build.result }}" )
+          failed=false
+          for r in "${results[@]}"; do
+            [ "$r" != "success" ] && failed=true
+          done
+          if $failed; then
+            echo "❌ One or more required jobs failed"
+            exit 1
+          fi
+          echo "✅ All required jobs passed — ready for merge"

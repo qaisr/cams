@@ -1,0 +1,174 @@
+# .claude/config/jira-sync.config.yml
+# ---------------------------------------------------------------------------
+# JIRA mirror configuration for the CANS local-copy model (plan 01a).
+#
+# This file is READ AS INSTRUCTION CONTEXT by the /jira command family and the
+# jira-helper agent — it is NOT parsed by a compiled TS pipeline, so no YAML
+# runtime dependency is added. The Phase-0 TS scripts (converter/hash) take
+# their inputs as function arguments; commands read the values below and pass
+# them in.
+#
+# Fields marked TODP (to-discover-at-init) are populated by /jira-init +
+# /jira-discover-fields against live JIRA and then committed. Do NOT hand-guess
+# customfield ids — discovery writes the real ones.
+# ---------------------------------------------------------------------------
+
+project: EON
+site: commbank.atlassian.net
+cloudId: 998e78d7-2a66-4fc0-809b-b43b4232d4b8
+
+# How stories tie to their epic. Company-managed(classic) projects normally use
+# the "Epic Link" field; team-managed/next-gen use `parent`. EON is
+# company-managed (simplified:false) but a live check confirmed `parent=EON-21`
+# returns all children directly, so the working strategy is `parent`.
+# /jira-discover-fields RE-CONFIRMS this at init and rewrites it if wrong.
+epicLinkStrategy: parent # parent | epic-link
+
+# --- JQL scope: the three saved queries /jira-sync unions (01a §6.2) ---------
+# Backlog-aware split so backlog items not yet parented to an epic are not
+# silently missed. The epics_and_children query is templated from
+# epicLinkStrategy (below shows the `parent` form for EON).
+scope:
+  epics_and_children: >
+    project = EON AND (issuetype = Epic OR parent in (EON-21))
+    ORDER BY updated DESC
+  backlog: >
+    project = EON AND statusCategory != Done AND sprint is EMPTY
+    ORDER BY priority DESC, rank ASC
+  current_sprint: >
+    project = EON AND sprint in openSprints()
+    ORDER BY rank ASC
+
+# The set of epic keys the epics_and_children query enumerates. Seeded with the
+# one epic confirmed live (EON-21); /jira-init's remote-epic discovery expands
+# this as more epics are mirrored. Keep in sync with scope.epics_and_children.
+epics:
+  - EON-21
+
+# --- Discovered fields (§6.3a) — resolved live by /jira-discover-fields -------
+# Enumerated against EON Story issue-type meta (id 51) on commbank.atlassian.net.
+# Matched by name + schema.custom, never guessed. Re-run discovery after any
+# JIRA field re-configuration.
+fields:
+  # Sprint is a customfield array; parse it by discovered shape, never raw.
+  # schema.custom = com.pyxis.greenhopper.jira:gh-sprint → modern object shape.
+  sprint:
+    id: customfield_10900 # gh-sprint (customId 10900)
+    shape: object # array of { id, name, state, startDate, endDate }
+  storyPoints:
+    id: customfield_10908 # float custom field "Story Points"
+  # epicLink id is only relevant when epicLinkStrategy == epic-link. EON uses
+  # `parent` (no Epic Link field exists on the Story create/edit meta).
+  epicLink:
+    id: null
+  # No gh-lexo-rank field is exposed on Story create meta; `ORDER BY rank ASC`
+  # resolves by name in JQL, so no id is required.
+  rank:
+    id: null
+  # EON stores Acceptance Criteria in a dedicated textarea custom field rather
+  # than inline in the Description. The converter reads AC from here and places
+  # it under the pushable `## Acceptance Criteria` region (§2.4).
+  acceptanceCriteria:
+    id: customfield_11500 # textarea "Acceptance Criteria"
+
+# --- Canonical board (§6.3b) — TODP: /jira-init resolves and records ----------
+# "Current sprint" = the active sprint of THIS board. If EON has >1 board, init
+# asks the human to pick; if none/Kanban, currentSprint degrades to backlog view.
+board:
+  id: 78047 # resolved live by /jira-init via sprint in openSprints()
+  name: EON board # canonical board owning "EON Sprint 27.1.2" (id 264759)
+
+# --- Artifact (issue type) → jira/ subfolder map ------------------------------
+# Drives where the converter writes each mirrored issue. Unlisted types fall
+# back to tasks/ (fail-safe home for company-managed extras like Dependency).
+artifactFolders:
+  Epic: epics
+  Story: stories
+  Task: tasks
+  Bug: bugs
+  Dependency: tasks
+
+# --- Status → statusCategory map ----------------------------------------------
+# JIRA supplies statusCategory directly on each issue (To Do | In Progress |
+# Done); this map is an offline fallback only, used by /jira reindex when a
+# sidecar predates category capture. JIRA's live category always wins on pull.
+statusCategory:
+  'To Do': 'To Do'
+  'Backlog': 'To Do'
+  'Selected for Development': 'To Do'
+  'In Progress': 'In Progress'
+  'In Review': 'In Progress'
+  'Done': 'Done'
+  'Closed': 'Done'
+
+# --- Staleness (01a §5.4) -----------------------------------------------------
+# The jira-helper warns and offers a sync if _index.json.lastSyncedAt is older
+# than this. reindex does NOT reset the clock (offline; §6.4).
+stalenessHours: 24
+
+# --- Batched large-scale sync (see "Batched large-scale sync" in jira-sync.md)
+# Twin of confluence-sync.config.yml. When a `/jira-sync --pull` scan finds MORE
+# THAN largeSyncThreshold issues actually PENDING (status_sync in {remote-ahead,
+# new}), the command switches to batched mode: it plans a queue (one batch per
+# epic, plus synthetic backlog/sprint batches; a larger epic is chunked), writes a
+# durable jira/.pull-runs/<run_id>.json tracker, and spawns ONE fresh subagent per
+# batch so no single Claude context holds every issue body. Evaluated on PENDING
+# work, NOT raw scope size.
+largeSyncThreshold: 15 # pending-issue count above which batched mode engages
+maxBatchPages: 8 # max issues per batch; a larger epic is split into chunks
+
+# --- Relationship-type vocabulary (plan 01d, E1) — READ AS INSTRUCTION CONTEXT ONLY
+# This block documents the link types the mirror recognizes and how the epic→child
+# hierarchy is modeled. It is NOT parsed by any TS runtime; converter.ts and the
+# write engine are unchanged. It exists so the vocabulary is declared in one place
+# rather than implied by code. Link data is PULL-ONLY and read-for-display: no
+# command writes links back to JIRA (see jira-write-engine.md §8.6 "Declined").
+relationships:
+  # How the epic ↔ child hierarchy is resolved. Mirrors the existing epicLinkStrategy
+  # key above. The hierarchy edge is NOT an issuelink: the converter reads it from the
+  # issue's `parent` field (f.parent.key) separately and renders it as `- Parent:`.
+  hierarchyMode: parent # parent (team-managed) | epic-link (company-managed)
+
+  # The relationships the JIRA→MD converter reads into the pull-only `## Links` region.
+  # `renderedAs` names the label the converter emits in the `.md` body today.
+  recognized:
+    - type: parent # epic → story/task/bug hierarchy edge
+      source: parent-field # from f.parent.key — NOT an issuelink, NOT via collectLinks()
+      renderedAs: 'Parent'
+    - type: epic-link # classic "Epic Link" field (company-managed projects)
+      source: parent-field # the epicLinkStrategy=epic-link equivalent of the hierarchy edge
+      renderedAs: 'Parent'
+    - type: blocks # this issue blocks another (outward issuelink of type "Blocks")
+      source: issuelink
+      direction: outward
+      renderedAs: 'Blocks'
+    - type: blocked-by # this issue is blocked by another (inward "Blocks" issuelink)
+      source: issuelink
+      direction: inward
+      renderedAs: 'Blocked by'
+    - type: relates # generic relationship issuelink
+      source: issuelink
+      direction: bidirectional
+      renderedAs: 'Relates'
+    - type: duplicates # this issue duplicates another
+      source: issuelink
+      direction: outward
+      renderedAs: 'Relates' # NOTE: currently flattened into `relates` on read (see below)
+    - type: clones # this issue clones another
+      source: issuelink
+      direction: outward
+      renderedAs: 'Relates' # NOTE: currently flattened into `relates` on read (see below)
+
+  # HONEST LIMITATION (matches scripts/jira/converter.ts collectLinks() today — verified,
+  # do not misrepresent): the issuelink collector recognizes ONLY the "Blocks" type
+  # distinctly — an outward "Blocks" link → `blocks`, an inward one → `blocked-by`. EVERY
+  # OTHER issuelink type (duplicates, clones, and any custom type), inward or outward, is
+  # flattened into `relates` when rendering the `## Links` region. (The `parent` hierarchy
+  # edge is separate — see hierarchyMode above — and is NOT handled by collectLinks().)
+  # Since links are pull-only and read-for-display, this flattening is cosmetic and is
+  # deliberately NOT fixed by this plan.
+  readFlattensNonBlocksInto: relates
+
+  # Link WRITING is a deliberate non-goal. The write engine is description-only.
+  # `createIssueLink` is a separate API surface and is intentionally not wired in.
+  writeSupported: false

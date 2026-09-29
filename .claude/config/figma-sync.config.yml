@@ -1,0 +1,46 @@
+# .claude/config/figma-sync.config.yml
+# ---------------------------------------------------------------------------
+# Figma local-copy mirror configuration (plan 02, Phase 3).
+#
+# This file is READ AS INSTRUCTION CONTEXT by the /figma command family and the
+# figma-helper agent — it is NOT parsed by a compiled TS pipeline, so no YAML
+# runtime dependency is added. Commands read the values below and pass them to
+# the scripts/figma/*.ts helpers as function arguments (mirrors how
+# jira-sync.config.yml / confluence-sync.config.yml feed their pipelines).
+#
+# The local mirror under figma/ is a local COPY of design source (R2: renders +
+# structure land on disk so a re-export is a real git diff). This phase is
+# INGEST/SYNC ONLY (R3) — it never writes specs/ (Phase 4) or apps/web/
+# (Phase 4 codegen). Figma MCP tools are called ONLY inside /figma* commands.
+# ---------------------------------------------------------------------------
+
+# --- File in scope ------------------------------------------------------------
+# Seeded fact: "Future State Exploration". The fileKey is pinned here ONCE and
+# never hardcoded elsewhere; commands read it from here.
+fileKey: '2MbwX0rxNA1uhgDwlC7Z6G'
+fileName: 'Future State Exploration'
+
+# --- Seat --------------------------------------------------------------------
+# Pipeline A/B (flows, wireframes/mid-fi) need only a Figma VIEW seat.
+# Pipeline C (hi-fi: get_design_context + get_variable_defs + download_assets)
+# needs a DEV seat. /add-figma-node checks the seat required by the chosen
+# pipeline before calling the MCP.
+seat: 'view'
+
+# --- Staleness (mirrors jira/confluence config §staleness) -------------------
+# Every /figma query checks _index.json.lastSyncedAt; if older than this, the
+# router warns and offers [Sync & answer / Answer from mirror anyway / Cancel].
+# reindex is OFFLINE and does NOT reset the clock (D4 / FN11).
+stalenessHours: 24
+
+# --- Identity resolution ------------------------------------------------------
+# _designers.json is a PROJECTION of people.json filtered to Figma-bearing
+# people (D8 / FN12) — not a separate roster. An unresolved Figma handle is not
+# guessed: 'ask' triggers a clarifying prompt to add a people.json entry.
+unresolvedAliasPolicy: 'ask'
+
+# --- Output-size discipline (§ pipelines) ------------------------------------
+# get_design_context on a top frame can be ~930k chars. Always get_metadata
+# first, pick a child sub-frame, then call get_design_context on that child.
+# get_figjam is only for /board/ URLs — the seeded link is /design/.
+maxDesignContextChars: 200000

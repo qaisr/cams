@@ -1,0 +1,55 @@
+---
+extends: default
+
+rules:
+  # Line length — 120 mirrors .prettierrc.json *.yaml override (Prettier is the
+  # source of truth; kept in sync by /health-scan). Advisory only — Prettier
+  # does the actual wrapping.
+  line-length:
+    max: 120
+    level: warning
+
+  # Indentation
+  indentation:
+    spaces: 2
+    indent-sequences: consistent
+
+  # Comments — require space after #
+  comments:
+    min-spaces-from-content: 1
+
+  # Truthy values — require explicit true/false, not yes/no/on/off
+  truthy:
+    allowed-values: ['true', 'false']
+    check-keys: false
+
+  # Do not require or forbid document-start markers (---)
+  document-start: disable
+
+  # Allow empty values (common in GitHub Actions)
+  empty-values:
+    forbid-in-block-mappings: false
+    forbid-in-flow-mappings: false
+
+  # Disable braces spacing — GitHub Actions ${{ }} syntax uses spaces inside braces
+  braces: disable
+
+# Ignore scope mirrors .prettierignore (Prettier is the source of truth): if
+# Prettier does not manage a file, yamllint's Prettier-derived width does not
+# police it either. Kept in sync by /health-scan.
+ignore: |
+  node_modules/
+  .next/
+  dist/
+  coverage/
+  cdk.out/
+  pnpm-lock.yaml
+  **/generated/
+  # .claude framework docs/templates — placeholder content, prettier-ignored
+  .claude/templates/
+  .claude/agents/
+  .claude/commands/
+  .claude/patterns/
+  .claude/standards/
+  .claude/workflows/
+  .claude/docs/

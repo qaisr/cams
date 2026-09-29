@@ -1,0 +1,16 @@
+**/node_modules
+**/dist
+**/.turbo
+**/coverage
+.git
+.github
+.claude
+.cspell
+docs
+specs
+infra
+apps/web
+demo
+**/*.log
+tmp*
+.env*

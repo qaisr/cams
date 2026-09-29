@@ -1,0 +1,104 @@
+#!/usr/bin/env bash
+# ---------------------------------------------------------------------------
+# design-qa-check — advisory design-QA hook (Plan 02b F5 / Phase 6).
+#
+# WARN-NEVER-BLOCK, MIRROR-ONLY, NO MCP.
+#
+# A courtesy signal after a build, not a gate. It reads ONLY on-disk mirror
+# state and NEVER calls any MCP tool, network, or the Figma canvas (BD9). It
+# exits 0 unconditionally — it may print warnings to stderr but never blocks a
+# tool call, commit, or build. Report only; it changes nothing.
+#
+# For every node under visual regression (figma/.visual-regression/manifest.json)
+# it checks the mirror-verifiable subset of the design-QA checklist:
+#   1. Visual parity  — lastResult.status == "pass", AND the baseline is fresh
+#                       (entry.baselineRenderHash == node renderHash in the meta
+#                       sidecar; unequal ⇒ stale ⇒ untrusted diff, BD6).
+#   6. Handshake      — figma/nodes/<slug>.handshake.json status == "cleared"
+#                       (or an "override" with a reason); pending/rejected warns
+#                       (BD5).
+# The token-conformance / a11y / component-reuse / states headings need the live
+# /figma-token-drift, /figma-codeconnect, and project a11y runs, so this hook does
+# not attempt them — it defers to /design-qa <slug> for the full gate.
+#
+# Missing/malformed files, or missing tooling → warn softly, exit 0.
+# ---------------------------------------------------------------------------
+
+set -u
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+MANIFEST="$ROOT/figma/.visual-regression/manifest.json"
+NODES_DIR="$ROOT/figma/nodes"
+
+warn() { printf '⚠️  design-qa-check: %s\n' "$1" >&2; }
+
+# Locate a Node runner + tsx (workspace binary). Degrade gracefully — never fail.
+NODE_BIN="$(command -v node || true)"
+TSX_BIN=""
+for cand in "$ROOT/node_modules/.bin/tsx" "$(command -v tsx || true)"; do
+  [ -n "$cand" ] && [ -x "$cand" ] && { TSX_BIN="$cand"; break; }
+done
+
+if [ -z "$NODE_BIN" ]; then
+  warn "node not found on PATH — skipping (advisory only)."
+  exit 0
+fi
+if [ ! -f "$MANIFEST" ]; then
+  warn "visual-regression manifest missing — skipping (advisory only)."
+  exit 0
+fi
+if [ -z "$TSX_BIN" ]; then
+  # Fall back to node itself for plain JSON reads (no TS import needed here).
+  TSX_BIN="$NODE_BIN"
+fi
+
+# Pure JSON reads over the mirror. No engine import is required (the checks are
+# simple equality/field reads), which keeps the hook robust even if tsx is
+# unavailable — we fall back to `node`. It calls NO MCP.
+NODES_DIR="$NODES_DIR" MANIFEST="$MANIFEST" "$TSX_BIN" -e '
+  const fs = require("node:fs");
+  const path = require("node:path");
+  const nodesDir = process.env.NODES_DIR;
+  const manifestPath = process.env.MANIFEST;
+
+  const read = (p) => { try { return JSON.parse(fs.readFileSync(p, "utf8")); } catch { return null; } };
+
+  const manifest = read(manifestPath);
+  if (!manifest || !Array.isArray(manifest.entries)) process.exit(0);
+  if (manifest.entries.length === 0) process.exit(0);
+
+  for (const entry of manifest.entries) {
+    const slug = entry && entry.slug;
+    if (!slug) continue;
+    const meta = read(path.join(nodesDir, slug + ".meta.json"));
+    const handshake = read(path.join(nodesDir, slug + ".handshake.json"));
+
+    // 1. Visual parity — pass + fresh baseline (BD6).
+    const lr = entry.lastResult;
+    if (!lr || lr.status !== "pass") {
+      const s = lr ? lr.status : "never run";
+      process.stderr.write(
+        `⚠️  design-qa-check: ${slug} — visual regression not passing (status: ${s}). Run /design-qa ${slug}.\n`
+      );
+    } else if (meta && meta.renderHash && entry.baselineRenderHash &&
+               meta.renderHash !== entry.baselineRenderHash) {
+      process.stderr.write(
+        `⚠️  design-qa-check: ${slug} — baseline STALE (renderHash moved); last diff untrusted. `
+        + `Run /figma pull then refresh the baseline (BD6).\n`
+      );
+    }
+
+    // 6. Handshake cleared (BD5).
+    const hstatus = handshake && handshake.status;
+    if (hstatus !== "cleared" && hstatus !== "override") {
+      const s = hstatus || "missing";
+      process.stderr.write(
+        `⚠️  design-qa-check: ${slug} — design handshake not cleared (status: ${s}). `
+        + `Run /design-handshake ${slug} (BD5).\n`
+      );
+    }
+  }
+' 2>&1 || warn "check run failed — skipping (advisory only)."
+
+# Advisory hook: ALWAYS succeed. Never block.
+exit 0

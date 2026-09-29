@@ -1,0 +1,368 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://cans.ppcc/jira/manifest.schema.json",
+  "title": "CANS JIRA mirror schemas",
+  "description": "JSON Schema for the four JIRA-mirror state layers (01a §2.1, §2.3, §3.2, §6.2). Each layer has one owner: sidecars + .manifest.json are authoritative sync state; per-epic {EPIC}.json is the epic body + children roster; _index.json is DERIVED/regenerable (gitignored). Validate any of them by referencing the matching $def, e.g. { \"$ref\": \"manifest.schema.json#/$defs/domainManifest\" }.",
+
+  "$defs": {
+    "statusSync": {
+      "description": "Local sync state relative to remote. Named status_sync so it never collides with JIRA's own workflow status (01a §2.1).",
+      "type": "string",
+      "enum": [
+        "clean",
+        "remote-ahead",
+        "local-ahead",
+        "diverged",
+        "new",
+        "orphaned"
+      ]
+    },
+
+    "sha256": {
+      "description": "SHA-256 digest, sha256:<hex> form (scripts/jira/hash.ts).",
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+
+    "issueType": {
+      "description": "Mirrored artifact type. Maps to a jira/ subfolder: Epic→epics/, Story→stories/, Task→tasks/, Bug→bugs/. Other company-managed types (e.g. Dependency) are stored under tasks/ unless config.artifactFolders overrides.",
+      "type": "string"
+    },
+
+    "links": {
+      "description": "Issue-link roster, one array per link direction (01a §2.1).",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "blocks": { "type": "array", "items": { "type": "string" } },
+        "blockedBy": { "type": "array", "items": { "type": "string" } },
+        "relates": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+
+    "itemSidecar": {
+      "description": "Per-item {KEY}.json sidecar for stories/tasks/bugs — the authoritative per-item sync state (01a §2.1). The human body lives in the sibling {KEY}.md; this file carries structured metadata + the dual hashes.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "key",
+        "type",
+        "url",
+        "summary",
+        "status",
+        "statusCategory",
+        "remoteUpdatedAt",
+        "localSyncedAt",
+        "contentHash",
+        "localEditsHash",
+        "status_sync"
+      ],
+      "properties": {
+        "source": { "const": "jira" },
+        "key": {
+          "type": "string",
+          "description": "JIRA issue key, e.g. EON-123."
+        },
+        "type": { "$ref": "#/$defs/issueType" },
+        "url": { "type": "string", "format": "uri" },
+        "summary": { "type": "string" },
+        "status": {
+          "type": "string",
+          "description": "JIRA workflow status name, e.g. In Progress."
+        },
+        "statusCategory": {
+          "type": "string",
+          "description": "JIRA status category: To Do | In Progress | Done (verbatim from JIRA).",
+          "enum": ["To Do", "In Progress", "Done"]
+        },
+        "assignee": {
+          "type": ["string", "null"],
+          "description": "JIRA account handle, or null when unassigned."
+        },
+        "reporter": { "type": ["string", "null"] },
+        "storyPoints": { "type": ["number", "null"] },
+        "priority": { "type": ["string", "null"] },
+        "sprint": {
+          "type": ["string", "null"],
+          "description": "Name of the issue's single active sprint, else most-recent future sprint, else null → backlog (01a §6.3a)."
+        },
+        "sprints": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Full sprint list for a carried-over issue in multiple sprints, so history isn't lost (01a §6.3a). Optional; present only when the issue is/was in >1 sprint."
+        },
+        "rank": {
+          "type": ["string", "null"],
+          "description": "JIRA lexorank where the field is available (01a §6.2) — drives /jira backlog ordering."
+        },
+        "labels": { "type": "array", "items": { "type": "string" } },
+        "parent": {
+          "type": ["string", "null"],
+          "description": "Parent epic key (via epicLinkStrategy), or null."
+        },
+        "links": { "$ref": "#/$defs/links" },
+        "remoteUpdatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "JIRA fields.updated as of the last pull — the diff baseline (01a §6.1)."
+        },
+        "localSyncedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When this sidecar was last written by an ingest/pull."
+        },
+        "contentHash": {
+          "$ref": "#/$defs/sha256",
+          "description": "Hash of the .md body as last written by ingest/sync (01a §2.2)."
+        },
+        "localEditsHash": {
+          "$ref": "#/$defs/sha256",
+          "description": "Hash of the .md body as it currently sits on disk. Differ from contentHash ⇒ human hand-edit ⇒ never clobber (01a §2.2)."
+        },
+        "status_sync": { "$ref": "#/$defs/statusSync" }
+      }
+    },
+
+    "epicManifest": {
+      "description": "Per-epic manifest jira/epics/{EPIC}.json (01a §2.3): the epic itself + comment history + children roster. The epic's human body lives in jira/epics/{EPIC}.md (descriptionRef). childrenHash detects a remote child add/remove/update on epic sync.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "key",
+        "type",
+        "summary",
+        "status",
+        "descriptionRef",
+        "children",
+        "childrenHash",
+        "remoteUpdatedAt",
+        "localSyncedAt"
+      ],
+      "properties": {
+        "source": { "const": "jira" },
+        "key": { "type": "string" },
+        "type": { "const": "Epic" },
+        "url": { "type": "string", "format": "uri" },
+        "summary": { "type": "string" },
+        "status": { "type": "string" },
+        "statusCategory": {
+          "type": "string",
+          "enum": ["To Do", "In Progress", "Done"]
+        },
+        "assignee": { "type": ["string", "null"] },
+        "reporter": { "type": ["string", "null"] },
+        "priority": { "type": ["string", "null"] },
+        "sprint": { "type": ["string", "null"] },
+        "labels": { "type": "array", "items": { "type": "string" } },
+        "parent": {
+          "type": ["string", "null"],
+          "description": "The epic's own parent (e.g. an Initiative) — a LINK only, not a mirrored item (01a Context)."
+        },
+        "links": { "$ref": "#/$defs/links" },
+        "descriptionRef": {
+          "type": "string",
+          "description": "Relative path to the epic body, e.g. jira/epics/EON-21.md."
+        },
+        "comments": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["author", "at", "body"],
+            "properties": {
+              "author": { "type": "string" },
+              "at": { "type": "string", "format": "date-time" },
+              "body": { "type": "string" }
+            }
+          }
+        },
+        "children": {
+          "type": "array",
+          "description": "Children roster. Authoritative for the epic subtree; mirrored (derived) into _index.json.tree.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["key", "type", "file", "status", "remoteUpdatedAt"],
+            "properties": {
+              "key": { "type": "string" },
+              "type": { "$ref": "#/$defs/issueType" },
+              "file": { "type": "string" },
+              "status": { "type": "string" },
+              "assignee": { "type": ["string", "null"] },
+              "remoteUpdatedAt": { "type": "string", "format": "date-time" }
+            }
+          }
+        },
+        "childrenHash": {
+          "$ref": "#/$defs/sha256",
+          "description": "Hash of the sorted (key, remoteUpdatedAt) roster (01a §2.3)."
+        },
+        "remoteUpdatedAt": { "type": "string", "format": "date-time" },
+        "localSyncedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+
+    "domainManifest": {
+      "description": "jira/.manifest.json — authoritative sync scope + per-item pointers (committed, low-churn) (01a §2, §3.5).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["project", "site", "cloudId", "scope", "items"],
+      "properties": {
+        "project": { "type": "string", "const": "EON" },
+        "site": {
+          "type": "string",
+          "description": "e.g. commbank.atlassian.net"
+        },
+        "cloudId": { "type": "string" },
+        "epicLinkStrategy": {
+          "type": "string",
+          "enum": ["parent", "epic-link"],
+          "description": "How stories tie to epics. company-managed(classic)→epic-link; team-managed/next-gen→parent. EON is company-managed but parent=EON-21 returns children directly ⇒ parent (01a §6.2, confirmed at init)."
+        },
+        "scope": {
+          "type": "object",
+          "description": "The three saved JQL queries the sync unions (01a §6.2). Kept in sync with jira-sync.config.yml scope block.",
+          "additionalProperties": false,
+          "properties": {
+            "epics_and_children": { "type": "string" },
+            "backlog": { "type": "string" },
+            "current_sprint": { "type": "string" }
+          }
+        },
+        "board": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "id": { "type": ["integer", "null"] },
+            "name": { "type": ["string", "null"] }
+          }
+        },
+        "items": {
+          "type": "array",
+          "description": "One entry per mirrored issue — the pointer + a copy of the sync-critical hashes for a cheap scope read (full state is in the sidecar).",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["key", "type", "file", "status_sync"],
+            "properties": {
+              "key": { "type": "string" },
+              "type": { "$ref": "#/$defs/issueType" },
+              "file": {
+                "type": "string",
+                "description": "Sidecar path, e.g. jira/stories/EON-123.json."
+              },
+              "status_sync": { "$ref": "#/$defs/statusSync" },
+              "remoteUpdatedAt": { "type": "string", "format": "date-time" }
+            }
+          }
+        }
+      }
+    },
+
+    "index": {
+      "description": "jira/_index.json — DERIVED, regenerable rollup the jira-helper agent loads (01a §3.2). GITIGNORED. Never hand-authored; rebuilt from sidecars + epic manifests on every sync and by /jira reindex. generatedAt = last rebuild; lastSyncedAt = last remote pull (reindex must NOT touch lastSyncedAt — §3.2 invariant).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "project",
+        "generatedAt",
+        "lastSyncedAt",
+        "counts",
+        "items",
+        "tree",
+        "backlog",
+        "orphans"
+      ],
+      "properties": {
+        "project": { "type": "string" },
+        "generatedAt": { "type": "string", "format": "date-time" },
+        "lastSyncedAt": {
+          "type": ["string", "null"],
+          "format": "date-time",
+          "description": "Last remote pull time. null at fresh init until the first real pull (§3.2 timestamp invariant); /jira reindex must never touch it."
+        },
+        "currentSprint": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "properties": {
+            "id": { "type": "integer" },
+            "name": { "type": "string" },
+            "state": {
+              "type": "string",
+              "enum": ["active", "future", "closed"]
+            },
+            "startDate": { "type": ["string", "null"] },
+            "endDate": { "type": ["string", "null"] }
+          }
+        },
+        "counts": {
+          "type": "object",
+          "additionalProperties": { "type": "integer" }
+        },
+        "items": {
+          "type": "array",
+          "description": "One-line summaries (full body is in the .md). The agent answers most prompts from here, drilling into an .md only for full detail (01a §3.2).",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "key",
+              "type",
+              "summary",
+              "status",
+              "statusCategory",
+              "file"
+            ],
+            "properties": {
+              "key": { "type": "string" },
+              "type": { "$ref": "#/$defs/issueType" },
+              "summary": { "type": "string" },
+              "status": { "type": "string" },
+              "statusCategory": { "type": "string" },
+              "assignee": { "type": ["string", "null"] },
+              "points": { "type": ["number", "null"] },
+              "priority": { "type": ["string", "null"] },
+              "sprint": { "type": ["string", "null"] },
+              "parent": { "type": ["string", "null"] },
+              "links": { "$ref": "#/$defs/links" },
+              "file": { "type": "string" }
+            }
+          }
+        },
+        "tree": {
+          "type": "object",
+          "description": "epic key → { type, summary, children[] }. Derived from per-epic manifests.",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["type", "summary", "children"],
+            "properties": {
+              "type": { "type": "string" },
+              "summary": { "type": "string" },
+              "children": { "type": "array", "items": { "type": "string" } }
+            }
+          }
+        },
+        "backlog": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Keys of unparented / no-sprint items (sprint is EMPTY)."
+        },
+        "orphans": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Keys present in manifest but absent from remote, pending §6.5 disposition."
+        }
+      }
+    }
+  },
+
+  "oneOf": [
+    { "$ref": "#/$defs/domainManifest" },
+    { "$ref": "#/$defs/epicManifest" },
+    { "$ref": "#/$defs/itemSidecar" },
+    { "$ref": "#/$defs/index" }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "name": "@repo/validation",
+  "version": "0.0.0",
+  "private": true,
+  "main": "./src/index.js",
+  "types": "./src/index.d.ts",
+  "scripts": {
+    "type-check": "tsc --noEmit",
+    "lint": "eslint src --max-warnings=0"
+  },
+  "dependencies": {
+    "@asteasolutions/zod-to-openapi": "^8.5.0",
+    "@repo/database": "workspace:*",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3"
+  }
+}

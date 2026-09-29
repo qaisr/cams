@@ -1,0 +1,246 @@
+{
+    "_comment": "Unified configuration for both Claude Code and OpenCode — production-quality code with optimized token usage",
+    "_usage": "Referenced by opencode.json and used natively by Claude Code",
+    "model_config": {
+        "temperature": 0.2,
+        "max_tokens": 8000,
+        "top_p": 0.95,
+        "thinking": {
+            "type": "enabled",
+            "budget_tokens": 4000,
+            "reasoning_effort": "medium",
+            "text_verbosity": "low"
+        }
+    },
+    "context": {
+        "max_files": 6,
+        "max_tokens": 120000,
+        "include_files": true,
+        "include_symbols": true,
+        "include_diagnostics": true,
+        "include_git": false,
+        "notes": [
+            "Limit to 6 files per context to stay within token budget",
+            "Use Grep/Glob to find relevant files before reading",
+            "Load standards files lazily based on task type"
+        ]
+    },
+    "generation": {
+        "sql": {
+            "temperature": 0.1,
+            "style": "explicit_columns",
+            "notes": [
+                "Always name constraints explicitly",
+                "Always include created_at/updated_at/created_by/updated_by",
+                "Use parameterized queries only — no string concatenation",
+                "Prefer CTEs over nested subqueries for readability",
+                "Always include rollback in migration scripts"
+            ]
+        },
+        "typescript": {
+            "temperature": 0.2,
+            "version": "5.x",
+            "framework": "nextjs-14",
+            "formatting": {
+                "indent_style": "space",
+                "indent_size": 2,
+                "max_line_length": 100,
+                "quote_style": "single",
+                "semicolons": true,
+                "prettier_rules": [
+                    "2-space indentation for all nesting levels",
+                    "Single quotes for TypeScript code",
+                    "Double quotes for JSX attributes",
+                    "Semicolons always required",
+                    "Max 100 characters per line",
+                    "Trailing commas in multi-line (es5 mode)"
+                ],
+                "eslint_rules": [
+                    "No 'any' type without justification (use 'unknown')",
+                    "Prefer 'const' over 'let' when not reassigned",
+                    "No console.log in production code",
+                    "React hooks: exhaustive dependencies",
+                    "Prefer type over interface for unions",
+                    "Use optional chaining for nullable values"
+                ],
+                "examples": {
+                    "type_definition": "type User = {\n  id: string;\n  name: string;\n  email: string;\n};",
+                    "component": "export function MyComponent({ user }: { user: User }) {\n  const [count, setCount] = useState(0);\n  return <div>{user.name}</div>;\n}",
+                    "api_call": "const response = await apiClient.get<UserResponse>('/users');\nreturn UserSchema.parse(response.data);"
+                }
+            },
+            "notes": [
+                "No 'any' type — use 'unknown' with type guards",
+                "Prefer type over interface for unions/intersections",
+                "Use Zod for runtime validation of API responses",
+                "All async functions: explicit error handling",
+                "Use React Server Components where no interactivity needed",
+                "Client components: 'use client' directive required",
+                "All forms: React Hook Form + Zod schema validation",
+                "CRITICAL: Follow .prettierrc.json (2-space indent, 100 char line)",
+                "CRITICAL: Validate with ESLint before submitting code"
+            ]
+        }
+    },
+    "quality_gates": {
+        "formatting_validation": {
+            "typescript": {
+                "reference": ".editorconfig, .prettierrc.json, and .eslintrc.json",
+                "indent_size": 2,
+                "max_line_length": 100,
+                "validate_command": "pnpm validate",
+                "critical_rules": [
+                    "No 'any' type - use 'unknown' with type guards",
+                    "Always use semicolons",
+                    "Single quotes for TS code, double quotes for JSX attributes",
+                    "Explicit error handling in all async functions",
+                    "No console.log - use proper logger",
+                    "Zod validation for all API responses"
+                ]
+            }
+        },
+        "always_enforce": [
+            "No hardcoded secrets or credentials",
+            "No console.log in production code (use logger)",
+            "All API endpoints documented in OpenAPI spec",
+            "All public functions have JSDoc (TSDoc style)",
+            "Error responses follow RFC 7807 Problem Details",
+            "All DB queries use parameterized statements",
+            "Correlation ID propagated through all layers"
+        ],
+        "test_coverage": {
+            "new_code_minimum": 80,
+            "critical_paths_minimum": 95,
+            "exclude_patterns": [
+                "**/generated/**",
+                "**/migrations/**",
+                "**/*.config.*"
+            ]
+        }
+    },
+    "context_optimization": {
+        "strategy": "lazy_load_on_demand",
+        "load_lazily": true,
+        "prefer_focused_files": true,
+        "max_file_size_kb": 50,
+        "lazy_load_mapping": {
+            "typescript_formatting": ".claude/standards/typescript-formatting-standards.md",
+            "frontend_ui": ".claude/standards/frontend-standards.md",
+            "api_backend": ".claude/standards/api-standards.md",
+            "database": ".claude/standards/database-standards.md",
+            "security": ".claude/standards/security-standards.md",
+            "testing": ".claude/standards/testing-standards.md",
+            "deployment": ".claude/workflows/deployment.md",
+            "monitoring": ".claude/standards/observability-standards.md",
+            "feature_development": ".claude/workflows/feature-development.md",
+            "epic_implementation": ".claude/workflows/epic-based-development.md"
+        },
+        "notes": [
+            "ALWAYS read project-structure.md before any file operations or directory navigation to avoid token waste on failed attempts",
+            "Load standards files only when relevant to current task",
+            "ALWAYS load typescript-formatting-standards.md before generating TypeScript/React code",
+            "Prefer targeted file reads over loading entire directories",
+            "Use search tools to find relevant code before reading whole files",
+            "Split large features into epics to stay within token limits"
+        ]
+    },
+    "cba_specific": {
+        "auth": {
+            "provider": "PingID",
+            "mechanism": "NestJS JwtAuthGuard (passport-jwt + jwks-rsa) on the Fargate service behind an internal ALB",
+            "never_use": [
+                "Cognito",
+                "JWT self-signed",
+                "Basic Auth in prod"
+            ]
+        },
+        "network": {
+            "aws_connectivity": "DirectConnect",
+            "note": "All AWS SDK calls assume VPC + DirectConnect — no public endpoints"
+        },
+        "ui_library": {
+            "primary": "project-configured",
+            "note": "Use the component library configured for this project. Check @.claude/project-structure.md.",
+            "never_mix": "Do not introduce a second UI component library without user confirmation"
+        },
+        "framework_docs": {
+            "provider": "Context7",
+            "mcp_server": "https://mcp.context7.com/mcp",
+            "use_for": [
+                "NextJS",
+                "React",
+                "TanStack Query",
+                "React Hook Form",
+                "Zod",
+                "Playwright"
+            ]
+        },
+        "logging": {
+            "business_events": "Observe",
+            "technical_logs": "CloudWatch",
+            "tracing": "AWS X-Ray"
+        },
+        "compliance": [
+            "APRA CPS 234 — information security",
+            "PCI DSS — where payment data involved",
+            "Privacy Act 1988 — PII handling"
+        ]
+    },
+    "aws_patterns": {
+        "fargate": {
+            "runtime": "NestJS 11 (Fastify) container image, node:20",
+            "compute": "Long-lived ECS Fargate service behind an internal ALB",
+            "deployment": "AWS CDK v2 (ApplicationLoadBalancedFargateService)",
+            "batch": "Scheduled ECS tasks via EventBridge Scheduler → RunTask (Murex EOD export, CMDM daily sync)",
+            "notes": [
+                "Internal ALB (no public endpoints) routes Authorization: Bearer to the service",
+                "JwtAuthGuard (global) validates JWT via passport-jwt + jwks-rsa in-app",
+                "Use @RequirePermissions for method-level scope enforcement",
+                "Use RDS Proxy for connection pooling across service tasks and scheduled batch tasks",
+                "Warm containers (desiredCount >= 1, target-tracking autoscale) — no cold starts on the hot path"
+            ]
+        },
+        "rds": {
+            "engine": "PostgreSQL 16, Multi-AZ instance",
+            "connectivity": "VPC private isolated subnet only",
+            "credentials": "Secrets Manager rotation enabled",
+            "notes": [
+                "Use RDS Proxy for connection pooling behind the Fargate service and scheduled tasks",
+                "Enable Performance Insights",
+                "Automated backups: 7 day minimum retention"
+            ]
+        }
+    },
+    "file_templates": {
+        "note": "Templates are in .claude/templates/ — load on demand",
+        "available": [
+            "nestjs-controller.ts",
+            "nestjs-service.ts",
+            "nestjs-repository.ts",
+            "openapi-endpoint.yaml",
+            "prisma-migration.sql",
+            "nextjs-page.tsx",
+            "nextjs-component.tsx",
+            "nextjs-api-client.ts",
+            "jest-unit-test.ts",
+            "playwright-e2e.ts",
+            "github-actions-pipeline.yml",
+            "cdk-fargate-stack.ts"
+        ]
+    },
+    "code_generation_preferences": {
+        "avoid_over_engineering": [
+            "Don't add features beyond what was requested",
+            "Don't refactor code unless explicitly asked",
+            "Don't add docstrings/comments to unchanged code",
+            "Don't create abstractions for single-use operations",
+            "Three similar lines > premature abstraction"
+        ],
+        "simplicity_principles": [
+            "Only validate at system boundaries (user input, external APIs)",
+            "Trust internal code and framework guarantees",
+            "Don't add error handling for impossible scenarios",
+            "Delete unused code completely (no commenting out)"
+        ]
+    }
+}

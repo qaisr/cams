@@ -1,0 +1,34 @@
+{
+  "$schema": "./rbac-group-permissions.schema.json",
+  "title": "User Group Permissions Mapping",
+  "description": "Canonical source of truth for group-to-permission mapping. Consumed by both frontend and backend.",
+  "version": "1.0.0",
+  "lastUpdated": "2026-05-31",
+  "groups": {
+    "mx-superadmin": {
+      "displayName": "Superadmin",
+      "description": "Full access to all system functions, including admin and governance",
+      "permissions": []
+    },
+    "mx-admin": {
+      "displayName": "Admin",
+      "description": "Administrative access to platform and workflow management",
+      "permissions": ["app:admin", "doc:admin", "workflow:admin"]
+    },
+    "mx-requestor": {
+      "displayName": "Requestor",
+      "description": "Can create requests and read documents",
+      "permissions": ["doc:create", "app:create", "app:update"]
+    },
+    "mx-user": {
+      "displayName": "User",
+      "description": "Basic user with document creation rights",
+      "permissions": ["doc:read", "app:read", "deny:legal-opinions"]
+    },
+    "mx-negotiator": {
+      "displayName": "Negotiator",
+      "description": "Can create and edit documents",
+      "permissions": ["doc:create", "doc:update"]
+    }
+  }
+}

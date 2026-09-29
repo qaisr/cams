@@ -1,0 +1,60 @@
+# .husky/pre-commit
+# Target: <15 seconds
+# Runs on staged files only via lint-staged
+# No network calls — everything runs locally
+
+echo "🔍 Pre-commit checks..."
+
+# ── 0. hooksPath sanity — fast, non-blocking (~ms) ────────────────────────────
+# A corrupted core.hooksPath silently breaks every git hook. Catching it here —
+# the earliest, most-frequent hook — surfaces drift on the next commit.
+HOOKS_PATH=$(git config core.hooksPath 2>/dev/null)
+if [ -n "$HOOKS_PATH" ] && [ "$HOOKS_PATH" != ".husky/_" ]; then
+  echo ""
+  echo "⚠️  git core.hooksPath is '$HOOKS_PATH' (expected '.husky/_'). Fix with:"
+  echo "     git config core.hooksPath .husky/_"
+fi
+
+# ── 1. Secret detection — runs first, before lint-staged re-stages files ───────
+# Must run before lint-staged to scan the original staged diff accurately.
+GITLEAKS=$(command -v gitleaks 2>/dev/null || echo /opt/homebrew/bin/gitleaks)
+if [ -x "$GITLEAKS" ]; then
+  "$GITLEAKS" protect --staged --no-banner 2>/dev/null || {
+    echo ""
+    echo "❌ Potential secret detected in staged files."
+    echo "   Review the output above. If a false positive, add to .gitleaksignore"
+    echo "   NEVER commit real credentials — use AWS Secrets Manager or .env.local"
+    exit 1
+  }
+else
+  # Fallback: basic grep for common secret patterns (no gitleaks installed)
+  STAGED=$(git diff --cached --name-only --diff-filter=ACM)
+  if [ -n "$STAGED" ] && echo "$STAGED" | xargs grep -lE \
+    "(AKIA[0-9A-Z]{16}|password\s*=\s*['\"][^'\"]{8,}|secret\s*=\s*['\"][^'\"]{8,})" \
+    2>/dev/null | grep -v "\.env\.example\|\.snyk\|test\|spec\|mock"; then
+    echo ""
+    echo "⚠️  Possible hardcoded secret detected. Review before committing."
+    echo "   Install gitleaks for accurate detection: brew install gitleaks"
+    # Warning only — not blocking (gitleaks in CI will catch real issues)
+  fi
+fi
+
+# ── 2. lint-staged — ESLint fix + Prettier write (staged files only) ──────────
+pnpm exec lint-staged || {
+  echo ""
+  echo "❌ Lint/format failed. Fix the issues above and re-stage."
+  exit 1
+}
+
+# ── 3. Type-check affected workspaces (Turborepo cache makes this fast) ───────
+if [ -z "$CI" ] && [ -z "$SKIP_TYPE_CHECK" ]; then
+  echo "🔷 Type checking affected packages..."
+  pnpm turbo run type-check --affected --output-logs=errors-only 2>/dev/null || {
+    echo ""
+    echo "❌ TypeScript errors found."
+    echo "   Run: pnpm type-check"
+    exit 1
+  }
+fi
+
+echo "✅ Pre-commit passed"

@@ -1,0 +1,48 @@
+# Lightweight PR-only checks — size labels, conventional commits, stale branches
+name: PR Checks
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+
+jobs:
+  commitlint:
+    name: Commit Messages
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: wagoid/commitlint-github-action@v6
+        with:
+          configFile: package.json # commitlint config in root package.json
+
+  pr-size:
+    name: PR Size Label
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - uses: codelytv/pr-size-labeler@v1
+        with:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          xs_max_size: 10
+          s_max_size: 50
+          m_max_size: 200
+          l_max_size: 500
+          # xl = anything above 500 lines
+
+  required-checks:
+    name: Required Checks Summary
+    runs-on: ubuntu-latest
+    needs: [commitlint]
+    if: always()
+    steps:
+      - name: Check all required jobs passed
+        run: |
+          if [ "${{ needs.commitlint.result }}" != "success" ]; then
+            echo "❌ Commit message check failed"
+            exit 1
+          fi
+          echo "✅ All PR checks passed"

@@ -1,0 +1,30 @@
+{
+  "_note": "Authoritative Figma-name ↔ Lumen-code-name resolver. Hand-owned + committed. The 02 §7 convention scan may only PROPOSE entries here (human-approved); it is never authoritative.",
+  "entries": [
+    {
+      "figmaName": "TopNavigationBars",
+      "lumenComponent": "DefaultTopAppBarScaffold",
+      "lumenPath": "apps/web/src/components/navigation/DefaultTopAppBarScaffold",
+      "aliases": ["TopNav", "AppBar"],
+      "confidence": 1.0,
+      "source": "verified"
+    },
+    {
+      "figmaName": "PrimaryHeadingContentTemplate",
+      "lumenComponent": "PrimaryHeadingContentTemplate",
+      "lumenPath": "apps/web/src/components/templates/PrimaryHeadingContentTemplate",
+      "aliases": ["PrimaryHeading"],
+      "confidence": 1.0,
+      "source": "verified"
+    },
+    {
+      "figmaName": "ResultTemplate",
+      "lumenComponent": "ResultTemplate",
+      "lumenPath": "apps/web/src/components/templates/ResultTemplate",
+      "aliases": [],
+      "confidence": 0.7,
+      "source": "inferred"
+    }
+  ],
+  "unresolvedPolicy": "propose-then-ask"
+}

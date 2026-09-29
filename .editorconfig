@@ -1,0 +1,50 @@
+# editorconfig.org
+# Baseline for ALL files — IDE fallback for non-JS/TS files
+# JS/TS/JSON/YAML/CSS: Prettier takes over (same values — no conflict).
+# Numeric values (indent_size, max_line_length) MIRROR .prettierrc.json and are
+# kept in sync by /health-scan (Prettier is the source of truth).
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+indent_size = 2
+insert_final_newline = true
+trim_trailing_whitespace = true
+max_line_length = 100
+
+[*.{ts,tsx,js,jsx,mjs,cjs}]
+indent_size = 2
+# Prettier handles actual formatting — EditorConfig just sets the baseline
+
+[*.{json,jsonc}]
+indent_size = 2
+max_line_length = 80    # mirrors .prettierrc.json *.json override
+
+[*.{yaml,yml}]
+indent_size = 2
+max_line_length = 120   # mirrors .prettierrc.json *.yaml override
+
+[*.{css,scss}]
+indent_size = 2
+
+[*.md]
+trim_trailing_whitespace = false  # Trailing spaces = line breaks in Markdown
+max_line_length = 80
+
+[*.prisma]
+indent_size = 2
+max_line_length = 120   # mirrors .prettierrc.json *.prisma override
+
+[*.sh]
+end_of_line = lf
+indent_size = 2
+
+# Makefiles require tabs
+[Makefile]
+indent_style = tab
+
+# Batch files require CRLF on Windows
+[*.{cmd,bat}]
+end_of_line = crlf

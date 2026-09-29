@@ -1,0 +1,44 @@
+{
+  "printWidth": 100,
+  "tabWidth": 2,
+  "useTabs": false,
+  "semi": true,
+  "singleQuote": true,
+  "quoteProps": "as-needed",
+  "jsxSingleQuote": false,
+  "trailingComma": "all",
+  "bracketSpacing": true,
+  "bracketSameLine": false,
+  "arrowParens": "always",
+  "endOfLine": "lf",
+  "embeddedLanguageFormatting": "auto",
+  "overrides": [
+    {
+      "files": "*.json",
+      "options": {
+        "printWidth": 80,
+        "trailingComma": "none"
+      }
+    },
+    {
+      "files": "*.yaml",
+      "options": {
+        "singleQuote": false,
+        "printWidth": 120
+      }
+    },
+    {
+      "files": "*.md",
+      "options": {
+        "printWidth": 80,
+        "proseWrap": "always"
+      }
+    },
+    {
+      "files": "*.prisma",
+      "options": {
+        "printWidth": 120
+      }
+    }
+  ]
+}

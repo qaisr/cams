@@ -1,0 +1,31 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 40vh;
+  padding: 2rem;
+  text-align: center;
+}
+
+.code {
+  font-size: 3rem;
+  font-weight: 700;
+  color: #c0392b;
+  margin: 0 0 0.5rem;
+  line-height: 1;
+}
+
+.heading {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin: 0 0 0.75rem;
+}
+
+.message {
+  font-size: 0.9375rem;
+  color: #555555;
+  max-width: 40ch;
+  margin: 0;
+}

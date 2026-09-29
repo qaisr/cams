@@ -1,0 +1,52 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RBAC Group Permissions Schema",
+  "type": "object",
+  "required": ["$schema", "title", "version", "groups"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "version": {
+      "type": "string"
+    },
+    "lastUpdated": {
+      "type": "string"
+    },
+    "groups": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/definitions/GroupConfig"
+      }
+    }
+  },
+  "definitions": {
+    "GroupConfig": {
+      "type": "object",
+      "required": ["displayName", "description", "permissions"],
+      "additionalProperties": false,
+      "properties": {
+        "displayName": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "permissions": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z*][a-z0-9-]*:[a-z*][a-z0-9-]*(:[a-z]+)?$"
+          }
+        }
+      }
+    }
+  }
+}

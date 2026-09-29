@@ -1,0 +1,40 @@
+# Snyk security policy
+# Docs: https://docs.snyk.io/snyk-cli/test-for-vulnerabilities/the-snyk-file
+# Managed vulnerabilities are reviewed and approved — not blindly ignored
+
+version: v1.25.0
+
+# ── Ignore policies ───────────────────────────────────────────────────────────
+# Format:
+#   'SNYK-ID':
+#     - '*':
+#         reason: Business justification
+#         expires: 'YYYY-MM-DD'   ← always set an expiry — forces periodic review
+#         created: 'YYYY-MM-DD'
+#
+# IMPORTANT:
+# - Never ignore CRITICAL severity without security team sign-off
+# - All ignores must have a reason and expiry date
+# - Expired ignores will cause CI to fail — review and renew or remove
+#
+# Example (uncomment and populate when needed):
+# ignore:
+#   'SNYK-JS-EXAMPLE-12345':
+#     - '*':
+#         reason: >
+#           Vulnerability in dev dependency only — not present in production build.
+#           Upstream fix pending in next minor release.
+#         expires: '2025-06-30'
+#         created: '2025-01-15'
+
+ignore: {}
+
+# ── Patch policies ────────────────────────────────────────────────────────────
+# Snyk-managed patches (applied via snyk protect)
+patch: {}
+
+# ── Language settings ─────────────────────────────────────────────────────────
+language-settings:
+  javascript:
+    # Scan all packages in monorepo
+    packageManager: pnpm

@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "../../packages/tsconfig/nestjs.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "../..",
+    "types": ["jest", "node"],
+    "paths": {
+      "@repo/database": ["../../packages/database/src/index.ts"],
+      "@repo/database/generated/zod": [
+        "../../packages/database/generated/zod/index.ts"
+      ],
+      "@repo/shared-config": ["../../packages/shared-config/src/index.ts"],
+      "@repo/validation": ["../../packages/validation/src/index.ts"],
+      "@repo/common": ["../../packages/common/src/index.ts"]
+    }
+  },
+  "include": [
+    "jest.config.ts",
+    "src/**/*",
+    "test/**/*",
+    "../../packages/database/src/**/*",
+    "../../packages/shared-config/src/**/*",
+    "../../packages/validation/src/**/*",
+    "../../packages/common/src/**/*"
+  ],
+  "exclude": ["node_modules", "dist", "**/generated/**"]
+}

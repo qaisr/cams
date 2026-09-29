@@ -1,0 +1,452 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://cans.ppcc/figma/manifest.schema.json",
+  "title": "CANS Figma mirror schemas",
+  "description": "JSON Schema for the Figma-mirror state layers (Plan 02, Phase 3 — reconciled shape). Draft-07 to match the JIRA precedent (jira/manifest.schema.json). Each layer has one owner: figma/.manifest.json (figmaDomain) is the authoritative tracked-file scope; per-file figma/files/{fileKey}.json (figmaFileManifest) is the per-file page/frame inventory + that file's sync state; per-node meta figma/nodes/<slug>.meta.json (figmaNodeMeta) carries the dual-timestamp + hash sync state for one tracked node; figma/_index.json (figmaIndex) is DERIVED/regenerable and gitignored; figma/_designers.json (figmaDesigners) is a gitignored projection of .claude/config/people.json filtered to Figma-bearing people (D8). Validate any layer by referencing the matching $def, e.g. { \"$ref\": \"manifest.schema.json#/$defs/figmaNodeMeta\" }.",
+
+  "$defs": {
+    "sha256": {
+      "description": "SHA-256 digest, sha256:<hex> form (scripts/figma/hash.ts).",
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+
+    "nodeId": {
+      "description": "Figma node ID in colon form, e.g. 299:12006 (Plan 02 D5). Stored verbatim in JSON; hyphen form appears only in URLs, underscore form (299_12006) only in assets/ path segments.",
+      "type": "string",
+      "pattern": "^\\d+:\\d+$"
+    },
+
+    "fileKey": {
+      "description": "Figma file key from the design URL (figma.com/design/{fileKey}/...).",
+      "type": "string",
+      "pattern": "^[0-9a-zA-Z]{22,128}$"
+    },
+
+    "pipeline": {
+      "description": "Which conversion pipeline governs this node (Plan 02 brief semantics). A = Flows / journeys (get_metadata + generate_diagram, View seat). B = Wireframes / mid-fi screens (get_metadata + get_screenshot, View seat). C = Hi-fi screens (get_design_context + get_screenshot + get_variable_defs + download_assets, Dev seat).",
+      "type": "string",
+      "enum": ["A", "B", "C"]
+    },
+
+    "statusSync": {
+      "description": "Local sync state of a tracked node relative to its Figma source (Plan 02 §6 algorithm). Named status_sync in the payloads so it never collides with Figma's own concepts (mirrors the JIRA statusSync convention). clean = render and structure both match the last-pulled baseline; render-ahead = the exported render changed but structure did not; structure-ahead = the node subtree structure changed but the render did not; diverged = both changed; new = tracked locally but never pulled (no baseline yet); orphaned = the node is gone from the Figma source but the sidecar remains.",
+      "type": "string",
+      "enum": [
+        "clean",
+        "render-ahead",
+        "structure-ahead",
+        "diverged",
+        "new",
+        "orphaned"
+      ]
+    },
+
+    "buildStatus": {
+      "description": "Code-generation coverage of the node's converted component/page (Plan 02 brief). not-built = no converted artifact exists yet; partial = some but not all of the node's frames/components have been converted; built = fully converted. (Phase-4 codegen-runtime states such as building/failed are intentionally NOT modelled in the Phase-3 mirror.)",
+      "type": "string",
+      "enum": ["not-built", "partial", "built"]
+    },
+
+    "handshakeStatus": {
+      "description": "Design-handshake gate state, mirroring figma/nodes/<slug>.handshake.json.status (Plan 02b F2 / Phase 5, decision BD5). not-required = internal/experimental screen exempt from the gate (or the Phase-4 hi-fi fixture); pending = a handshake exists but is not yet cleared; cleared = squad + Lumen designers + platform rep signed off with an attached a11y spec — the only value that unblocks buildStatus: built; rejected = the handshake was reviewed and knocked back. A node whose buildStatus is built while handshakeStatus is pending/rejected is surfaced as `built (⚠ handshake pending)` — never a clean built.",
+      "type": "string",
+      "enum": ["not-required", "pending", "cleared", "rejected"]
+    },
+
+    "figmaNodeMeta": {
+      "description": "Per-node sync sidecar figma/nodes/<slug>.meta.json (Plan 02 §on-disk layout). One per tracked node. renderHash = hash of the exported render bytes; structureHash = order-independent hash of the node subtree structure; localEditsHash = hash of any code-side edits/annotations. Two-timestamp invariant (D4): lastSyncedAt advances only on a real pull; generatedAt advances on every reindex.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "nodeId",
+        "fileKey",
+        "name",
+        "pipeline",
+        "renderHash",
+        "structureHash",
+        "localEditsHash",
+        "status_sync",
+        "buildStatus",
+        "handshakeStatus",
+        "lastSyncedAt",
+        "generatedAt"
+      ],
+      "properties": {
+        "source": { "const": "figma" },
+        "nodeId": { "$ref": "#/$defs/nodeId" },
+        "fileKey": { "$ref": "#/$defs/fileKey" },
+        "name": {
+          "type": "string",
+          "description": "Figma layer/component name, verbatim (R1 — no de-identification)."
+        },
+        "pipeline": { "$ref": "#/$defs/pipeline" },
+        "renderHash": {
+          "$ref": "#/$defs/sha256",
+          "description": "Hash of the exported render bytes as of the last pull (renderHash())."
+        },
+        "structureHash": {
+          "$ref": "#/$defs/sha256",
+          "description": "Order-independent hash of the node subtree structure (structureHash())."
+        },
+        "localEditsHash": {
+          "$ref": "#/$defs/sha256",
+          "description": "Hash of code-side edits/annotations as they currently sit on disk (localEditsHash())."
+        },
+        "status_sync": { "$ref": "#/$defs/statusSync" },
+        "buildStatus": { "$ref": "#/$defs/buildStatus" },
+        "handshakeStatus": { "$ref": "#/$defs/handshakeStatus" },
+        "designer": {
+          "type": ["string", "null"],
+          "description": "people.json handle of the node's owning designer, or null when unattributed."
+        },
+        "componentRef": {
+          "type": ["string", "null"],
+          "description": "Relative path to the converted component/page in apps/web (populated once buildStatus reaches partial/built by Phase 4), or null."
+        },
+        "handshakeOverrideReason": {
+          "type": ["string", "null"],
+          "description": "Audit trail for a `/figma-to-lumen --override \"<reason>\"` build that bypassed the handshake gate (Phase 5 BD5). Written verbatim alongside the run log — the gate is never bypassed silently. null when no override was used."
+        },
+        "assets": {
+          "type": "array",
+          "description": "Relative paths of exported render/asset files for this node (e.g. figma/assets/299_12006/...). Underscore form in the path segment (D5).",
+          "items": { "type": "string" }
+        },
+        "artifacts": {
+          "type": "object",
+          "description": "Relative paths of the human-readable sidecars produced for this node's pipelines (e.g. the flow .mmd for Pipeline A, the .png + .md for Pipeline B).",
+          "additionalProperties": { "type": "string" }
+        },
+        "lastSyncedAt": {
+          "type": ["string", "null"],
+          "format": "date-time",
+          "description": "When this node was last pulled from Figma — the drift baseline. Advances only on a real pull (D4). null until the first pull (status_sync = new)."
+        },
+        "generatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When this sidecar was last rebuilt by a reindex. Advances on every reindex (D4)."
+        }
+      }
+    },
+
+    "figmaFileManifest": {
+      "description": "Per-file inventory figma/files/{fileKey}.json — the authoritative page/frame roster pulled for one fileKey, plus that file's last pull time and the file-level nodeTreeHash. nodes[] points at the per-node meta sidecars under figma/nodes/.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "fileKey",
+        "name",
+        "pages",
+        "nodes",
+        "lastSyncedAt"
+      ],
+      "properties": {
+        "source": { "const": "figma" },
+        "fileKey": { "$ref": "#/$defs/fileKey" },
+        "name": {
+          "type": "string",
+          "description": "Figma file name, verbatim."
+        },
+        "nodeTreeHash": {
+          "$ref": "#/$defs/sha256",
+          "description": "Order-independent structure hash of the whole tracked node tree for this file, for a cheap file-level drift check."
+        },
+        "pages": {
+          "type": "array",
+          "description": "Pages in this file and the frames tracked within each (mirrors the brief's pages[]/frames[]).",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["nodeId", "name"],
+            "properties": {
+              "nodeId": { "$ref": "#/$defs/nodeId" },
+              "name": { "type": "string" },
+              "frames": {
+                "type": "array",
+                "description": "Tracked frame node IDs on this page.",
+                "items": { "$ref": "#/$defs/nodeId" }
+              }
+            }
+          }
+        },
+        "nodes": {
+          "type": "array",
+          "description": "Roster of tracked nodes in this file — the pointer + a copy of sync-critical state for a cheap read (full state is in the node meta).",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["nodeId", "name", "pipeline", "file", "status_sync"],
+            "properties": {
+              "nodeId": { "$ref": "#/$defs/nodeId" },
+              "name": { "type": "string" },
+              "pipeline": { "$ref": "#/$defs/pipeline" },
+              "file": {
+                "type": "string",
+                "description": "Node-meta sidecar path, e.g. figma/nodes/mid-fi-e2e-flow.meta.json."
+              },
+              "status_sync": { "$ref": "#/$defs/statusSync" }
+            }
+          }
+        },
+        "lastSyncedAt": {
+          "type": ["string", "null"],
+          "format": "date-time",
+          "description": "When this file was last pulled from Figma (D4). null until the first pull."
+        }
+      }
+    },
+
+    "figmaDomain": {
+      "description": "figma/.manifest.json — the authoritative registry of tracked Figma files/domains + sync scope (committed, low-churn). Mirrors the JIRA domainManifest.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "files"],
+      "properties": {
+        "source": { "const": "figma" },
+        "files": {
+          "type": "array",
+          "description": "One entry per tracked Figma file.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["fileKey", "name"],
+            "properties": {
+              "fileKey": { "$ref": "#/$defs/fileKey" },
+              "name": {
+                "type": "string",
+                "description": "Human-friendly file name."
+              },
+              "defaultBranch": {
+                "type": ["string", "null"],
+                "description": "Figma branch key to track, or null for the main file."
+              },
+              "manifest": {
+                "type": "string",
+                "description": "Per-file manifest path, e.g. figma/files/{fileKey}.json."
+              },
+              "trackedRoots": {
+                "type": "array",
+                "description": "Root node IDs whose subtrees are tracked (empty ⇒ whole file).",
+                "items": { "$ref": "#/$defs/nodeId" }
+              },
+              "pipelines": {
+                "type": "array",
+                "description": "Pipeline tags in play for this file (A/B/C).",
+                "items": { "$ref": "#/$defs/pipeline" }
+              }
+            }
+          }
+        }
+      }
+    },
+
+    "figmaIndex": {
+      "description": "figma/_index.json — DERIVED, regenerable rollup (reconciled superset). GITIGNORED (D3). Never hand-authored; rebuilt from node metas + file manifests on every sync and reindex. Two-timestamp invariant (D4): generatedAt = last rebuild; lastSyncedAt = last remote pull (reindex must NOT touch lastSyncedAt).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "generatedAt",
+        "lastSyncedAt",
+        "counts",
+        "files",
+        "items",
+        "byPipeline",
+        "byDesigner",
+        "byStatus"
+      ],
+      "properties": {
+        "generatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Last reindex time. Advances on every rebuild."
+        },
+        "lastSyncedAt": {
+          "type": ["string", "null"],
+          "format": "date-time",
+          "description": "Last remote pull time. null at fresh init until the first real pull (D4 timestamp invariant); reindex must never touch it."
+        },
+        "counts": {
+          "type": "object",
+          "description": "Aggregate counts (e.g. byStatus, byPipeline, byBuildStatus totals).",
+          "additionalProperties": { "type": "integer" }
+        },
+        "files": {
+          "type": "array",
+          "description": "One-line summary per tracked file (fileKey → name + tracked-node count + last pull).",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["fileKey", "name"],
+            "properties": {
+              "fileKey": { "$ref": "#/$defs/fileKey" },
+              "name": { "type": "string" },
+              "nodeCount": { "type": "integer" },
+              "lastSyncedAt": {
+                "type": ["string", "null"],
+                "format": "date-time"
+              }
+            }
+          }
+        },
+        "items": {
+          "type": "array",
+          "description": "One-line summaries of every tracked node. The agent answers most prompts from here, drilling into a node meta only for full detail.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "nodeId",
+              "fileKey",
+              "name",
+              "pipeline",
+              "status_sync",
+              "buildStatus",
+              "file"
+            ],
+            "properties": {
+              "nodeId": { "$ref": "#/$defs/nodeId" },
+              "fileKey": { "$ref": "#/$defs/fileKey" },
+              "name": { "type": "string" },
+              "pipeline": { "$ref": "#/$defs/pipeline" },
+              "status_sync": { "$ref": "#/$defs/statusSync" },
+              "buildStatus": { "$ref": "#/$defs/buildStatus" },
+              "handshakeStatus": { "$ref": "#/$defs/handshakeStatus" },
+              "designer": { "type": ["string", "null"] },
+              "file": {
+                "type": "string",
+                "description": "Node-meta sidecar path."
+              }
+            }
+          }
+        },
+        "frameTree": {
+          "type": "object",
+          "description": "Reverse lookup: fileKey → page nodeId → tracked frame node IDs. The nesting view the /figma tree command renders.",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/nodeId" }
+            }
+          }
+        },
+        "componentUsage": {
+          "type": "object",
+          "description": "Reverse lookup: component/library reference → node IDs that use it (the /figma uses command). Empty until Phase-4 component refs exist.",
+          "additionalProperties": {
+            "type": "array",
+            "items": { "$ref": "#/$defs/nodeId" }
+          }
+        },
+        "buildCoverage": {
+          "type": "object",
+          "description": "Build-coverage rollup by bucket (the /figma coverage command).",
+          "additionalProperties": false,
+          "required": ["built", "partial", "not-built"],
+          "properties": {
+            "built": { "type": "array", "items": { "$ref": "#/$defs/nodeId" } },
+            "partial": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/nodeId" }
+            },
+            "not-built": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/nodeId" }
+            }
+          }
+        },
+        "mapsTo": {
+          "type": "array",
+          "description": "Node → converted artifact edges (nodeId ↔ componentRef). Empty in Phase 3; Phase 4 codegen populates it.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["nodeId", "componentRef"],
+            "properties": {
+              "nodeId": { "$ref": "#/$defs/nodeId" },
+              "componentRef": { "type": "string" }
+            }
+          }
+        },
+        "byPipeline": {
+          "type": "object",
+          "description": "Reverse lookup: pipeline tag → node IDs.",
+          "additionalProperties": {
+            "type": "array",
+            "items": { "$ref": "#/$defs/nodeId" }
+          }
+        },
+        "byDesigner": {
+          "type": "object",
+          "description": "Reverse lookup: designer handle → node IDs.",
+          "additionalProperties": {
+            "type": "array",
+            "items": { "$ref": "#/$defs/nodeId" }
+          }
+        },
+        "byStatus": {
+          "type": "object",
+          "description": "Reverse lookup: status_sync value → node IDs.",
+          "additionalProperties": {
+            "type": "array",
+            "items": { "$ref": "#/$defs/nodeId" }
+          }
+        }
+      }
+    },
+
+    "figmaDesigners": {
+      "description": "figma/_designers.json — DERIVED, GITIGNORED projection of .claude/config/people.json filtered to people with a Figma handle (D8). Never a separate roster; regenerated from people.json.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["generatedAt", "designers"],
+      "properties": {
+        "generatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When this projection was last rebuilt from people.json."
+        },
+        "designers": {
+          "type": "array",
+          "description": "One entry per person carrying a Figma handle.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["handle", "figma"],
+            "properties": {
+              "handle": {
+                "type": "string",
+                "description": "people.json canonical handle (the person's id)."
+              },
+              "name": {
+                "type": ["string", "null"],
+                "description": "Display name, verbatim from people.json."
+              },
+              "aliases": {
+                "type": "array",
+                "description": "Alias list carried through from people.json, for the agent's alias resolution.",
+                "items": { "type": "string" }
+              },
+              "figma": {
+                "type": "string",
+                "description": "Figma account handle / email, verbatim from people.json."
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+
+  "oneOf": [
+    { "$ref": "#/$defs/figmaDomain" },
+    { "$ref": "#/$defs/figmaFileManifest" },
+    { "$ref": "#/$defs/figmaNodeMeta" },
+    { "$ref": "#/$defs/figmaIndex" },
+    { "$ref": "#/$defs/figmaDesigners" }
+  ]
+}

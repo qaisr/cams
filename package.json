@@ -1,0 +1,161 @@
+{
+  "name": "my-app",
+  "version": "0.0.0",
+  "private": true,
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "build:dry": "pnpm tsc --build --dry",
+    "dev": "turbo run dev --parallel",
+    "start": "turbo run start",
+    "sb": "pnpm --filter @repo/web storybook",
+    "test": "turbo run test",
+    "test:integration": "turbo run test:integration",
+    "test:e2e": "turbo run test:e2e",
+    "test:coverage": "turbo run test:coverage",
+    "test:api": "turbo run test:api",
+    "test:preflight": "tsx scripts/preflight-check.ts",
+    "test:preflight:api": "tsx scripts/preflight-check.ts --scope=api",
+    "test:preflight:e2e": "tsx scripts/preflight-check.ts --scope=e2e",
+    "lint": "turbo run lint",
+    "lint:fix": "turbo run lint:fix",
+    "format": "prettier --write \"**/*.{ts,tsx,js,mjs,json,md,yaml,yml,css}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,mjs,json,md,yaml,yml,css}\"",
+    "spell": "cspell \"**/*.{ts,tsx,js,mjs,md,mdx}\" --no-progress --gitignore",
+    "spell:all": "cspell \"**\" --no-progress --gitignore",
+    "spell:words": "cspell \"**/*.{ts,tsx,js,mjs,md,mdx}\" --no-progress --gitignore --words-only --unique | sort -f",
+    "type-check": "turbo run type-check",
+    "generate": "tsx scripts/generate.ts",
+    "generate:prisma": "pnpm --filter @repo/database generate",
+    "generate:spec": "tsx --tsconfig apps/api/tsconfig.json apps/api/src/openapi/generate-spec.ts",
+    "generate:hooks": "pnpm --filter @repo/web orval",
+    "db:migrate": "pnpm --filter @repo/database migrate:dev",
+    "db:migrate:deploy": "pnpm --filter @repo/database migrate:deploy",
+    "db:seed": "pnpm --filter @repo/database seed",
+    "seed": "pnpm db:seed",
+    "demo": "pnpm seed && playwright test --config=demo/playwright.demo.config.ts --headed",
+    "db:studio": "pnpm --filter @repo/database studio",
+    "db:reset": "pnpm --filter @repo/database migrate:reset",
+    "infra:up": "docker compose -f docker/docker-compose.yml up -d",
+    "infra:down": "docker compose -f docker/docker-compose.yml down",
+    "infra:logs": "docker compose -f docker/docker-compose.yml logs -f",
+    "check-env": "tsx scripts/check-env.ts",
+    "prepare": "husky",
+    "clean": "turbo run clean && rimraf node_modules",
+    "audit": "pnpm audit --audit-level=high",
+    "upgrade": "pnpm update --latest --recursive && pnpm install && pnpm build",
+    "depcheck": "turbo run depcheck",
+    "depcheck:fix": "turbo run depcheck:fix",
+    "inspect:ui": "tsx scripts/browser-inspect.ts",
+    "interact:ui": "tsx scripts/browser-interact.ts",
+    "diagnose": "tsx scripts/diagnose-runtime.ts",
+    "snyk:test": "snyk test --severity-threshold=high --all-projects",
+    "snyk:fix": "snyk fix",
+    "snyk:auth": "snyk auth",
+    "snyk:monitor": "snyk monitor --all-projects",
+    "setup:gitleaks": "brew install gitleaks || echo 'Install manually: https://github.com/gitleaks/gitleaks'"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^21.2.0",
+    "@commitlint/config-conventional": "^21.2.0",
+    "@cspell/dict-aws": "4.0.17",
+    "@cspell/dict-en-au": "1.1.22",
+    "@cspell/dict-en-gb-mit": "3.1.24",
+    "@cspell/dict-en_us": "4.4.35",
+    "@cspell/dict-software-terms": "5.2.2",
+    "@eslint/js": "^10.0.1",
+    "@playwright/mcp": "^0.0.77",
+    "@types/node": "^26.1.0",
+    "@typescript-eslint/eslint-plugin": "^8.62.1",
+    "@typescript-eslint/parser": "^8.62.1",
+    "cspell": "10.0.1",
+    "eslint": "^10.6.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-import-resolver-typescript": "^4.4.5",
+    "eslint-plugin-import-x": "^4.17.1",
+    "eslint-plugin-security": "^4.0.1",
+    "eslint-plugin-unicorn": "^70.0.0",
+    "husky": "^9.1.7",
+    "jest-junit": "^17.0.0",
+    "lint-staged": "^17.0.8",
+    "prettier": "^3.9.4",
+    "rimraf": "^6.1.3",
+    "snyk": "^1.1305.2",
+    "style-dictionary": "^5.5.0",
+    "tsx": "^4.23.0",
+    "turbo": "^2.10.3",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.62.1"
+  },
+  "lint-staged": {
+    "*.{ts,tsx}": [
+      "eslint --fix --max-warnings=0",
+      "prettier --write",
+      "cspell --no-must-find-files --no-progress"
+    ],
+    "*.{js,mjs,cjs}": [
+      "eslint --fix --max-warnings=0 --no-warn-ignored",
+      "prettier --write"
+    ],
+    "*.{json,jsonc}": [
+      "prettier --write"
+    ],
+    "*.{md,mdx}": [
+      "prettier --write",
+      "cspell --no-must-find-files --no-progress"
+    ],
+    "*.{yaml,yml}": [
+      "prettier --write",
+      "yamllint -c .yamllint"
+    ],
+    "*.css": [
+      "prettier --write"
+    ],
+    "prisma/schema.prisma": [
+      "prisma format"
+    ]
+  },
+  "commitlint": {
+    "extends": [
+      "@commitlint/config-conventional"
+    ],
+    "rules": {
+      "type-enum": [
+        2,
+        "always",
+        [
+          "feat",
+          "fix",
+          "docs",
+          "style",
+          "refactor",
+          "perf",
+          "test",
+          "chore",
+          "ci",
+          "revert",
+          "build"
+        ]
+      ],
+      "subject-max-length": [
+        2,
+        "always",
+        100
+      ],
+      "body-max-line-length": [
+        1,
+        "always",
+        120
+      ]
+    }
+  },
+  "packageManager": "pnpm@9.12.0",
+  "pnpm": {
+    "patchedDependencies": {
+      "zod-prisma-types@3.3.11": "patches/zod-prisma-types@3.3.11.patch"
+    }
+  }
+}

@@ -1,0 +1,139 @@
+.page {
+  padding: 2rem;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.pageTitle {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin: 0 0 2rem;
+}
+
+/* ── Table section ─────────────────────────────────────── */
+
+.section {
+  margin-bottom: 2.5rem;
+}
+
+.sectionHeading {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #1a1a1a;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid #e0e0e0;
+  margin: 0 0 1rem;
+}
+
+.tableWrapper {
+  overflow-x: auto;
+  border-radius: 6px;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.08);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+  background: #ffffff;
+}
+
+.table caption {
+  caption-side: top;
+  font-size: 0.8125rem;
+  color: #666666;
+  text-align: left;
+  padding: 0.5rem 0.75rem;
+  font-style: italic;
+}
+
+.table th {
+  background-color: #f0f4f8;
+  color: #1a1a1a;
+  font-weight: 600;
+  text-align: left;
+  padding: 0.625rem 0.875rem;
+  border-bottom: 2px solid #d0d8e0;
+}
+
+.table td {
+  padding: 0.625rem 0.875rem;
+  border-bottom: 1px solid #e8e8e8;
+  vertical-align: top;
+}
+
+.table tbody tr:nth-child(even) {
+  background-color: #fafafa;
+}
+
+.table tbody tr:hover {
+  background-color: #f5f9ff;
+}
+
+/* ── Permission chips ─────────────────────────────────── */
+
+.chipList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chip {
+  display: inline-block;
+  font-size: 0.75rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+  background-color: #e8f0fe;
+  color: #174ea6;
+  white-space: nowrap;
+}
+
+.chipDeny {
+  background-color: #fde8e8;
+  color: #c0392b;
+}
+
+.emptyPermissions {
+  font-size: 0.8125rem;
+  color: #888888;
+  font-style: italic;
+}
+
+.noteCell {
+  font-size: 0.8125rem;
+  color: #555555;
+}
+
+/* ── Strategy sections ────────────────────────────────── */
+
+.strategySection {
+  margin-bottom: 2rem;
+}
+
+.strategyHeading {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #1a1a1a;
+  padding-bottom: 0.375rem;
+  border-bottom: 1px solid #e0e0e0;
+  margin: 0 0 0.625rem;
+}
+
+.strategyText {
+  font-size: 0.9375rem;
+  color: #333333;
+  line-height: 1.6;
+  margin: 0;
+}
+
+.inlineCode {
+  font-family: monospace;
+  font-size: 0.875em;
+  background-color: #f0f0f0;
+  padding: 0.1em 0.3em;
+  border-radius: 3px;
+}

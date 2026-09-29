@@ -1,0 +1,98 @@
+#!/usr/bin/env bash
+# ---------------------------------------------------------------------------
+# token-drift-check — advisory token-drift hook (Plan 02b F3 / Phase 6).
+#
+# WARN-NEVER-BLOCK, MIRROR-ONLY, NO MCP.
+#
+# This hook is a courtesy signal, not a gate. It reads ONLY on-disk mirror
+# files and NEVER calls any MCP tool, network, or the Figma canvas (BD9). It
+# exits 0 unconditionally — it can emit a warning to stderr but never blocks a
+# tool call, commit, or build. Detection only; it rewrites nothing (BD4 / D21).
+#
+# What it reads (all committed mirror state):
+#   figma/tokens/figma-tokens.json       — current Figma token export (DTCG)
+#   figma/tokens/.baseline.dtcg.json     — last human-accepted baseline (DTCG)
+#   figma/tokens/.lumen-snapshot.json    — OPTIONAL on-disk Lumen token snapshot
+#                                          (DTCG). Absent by default; produced by
+#                                          /figma-token-drift if the user chooses
+#                                          to persist one. NEVER fetched here.
+#
+# Behaviour:
+#   - Figma export vs baseline → warn on any since-baseline change.
+#   - If the optional Lumen snapshot exists → also warn on Figma⟷Lumen drift,
+#     flagging semantic-tier drift as higher severity.
+#   - Missing/malformed files, or missing tooling → warn softly, exit 0.
+#
+# The authoritative, live analysis is /figma-token-drift (which MAY call MCP on
+# explicit user invocation). This hook only nudges.
+# ---------------------------------------------------------------------------
+
+set -u
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+FIGMA_TOKENS="$ROOT/figma/tokens/figma-tokens.json"
+BASELINE="$ROOT/figma/tokens/.baseline.dtcg.json"
+LUMEN_SNAPSHOT="$ROOT/figma/tokens/.lumen-snapshot.json"
+ENGINE="$ROOT/scripts/token-drift.ts"
+
+warn() { printf '⚠️  token-drift-check: %s\n' "$1" >&2; }
+
+# Locate a Node runner + tsx (workspace binary). Degrade gracefully — never fail.
+NODE_BIN="$(command -v node || true)"
+TSX_BIN=""
+for cand in "$ROOT/node_modules/.bin/tsx" "$(command -v tsx || true)"; do
+  [ -n "$cand" ] && [ -x "$cand" ] && { TSX_BIN="$cand"; break; }
+done
+
+if [ -z "$NODE_BIN" ]; then
+  warn "node not found on PATH — skipping (advisory only)."
+  exit 0
+fi
+if [ ! -f "$FIGMA_TOKENS" ] || [ ! -f "$BASELINE" ]; then
+  warn "figma token files missing under figma/tokens/ — skipping (advisory only)."
+  exit 0
+fi
+if [ ! -f "$ENGINE" ] || [ -z "$TSX_BIN" ]; then
+  warn "token-drift engine/tsx unavailable — skipping (advisory only)."
+  exit 0
+fi
+
+# Run the OFFLINE engine over the on-disk files. The engine itself does no I/O,
+# so this tiny driver reads the JSON, feeds the pure functions, and prints a
+# one-line advisory. It calls NO MCP.
+"$TSX_BIN" -e '
+  import fs from "node:fs";
+  import { flattenDtcg, diffTokens, classifyDrift, summarize } from "'"$ENGINE"'";
+
+  const read = (p) => { try { return JSON.parse(fs.readFileSync(p, "utf8")); } catch { return null; } };
+  const figma    = read("'"$FIGMA_TOKENS"'");
+  const baseline = read("'"$BASELINE"'");
+  const lumen    = read("'"$LUMEN_SNAPSHOT"'"); // optional; null if absent
+
+  if (!figma || !baseline) process.exit(0);
+
+  // Since-accepted-baseline drift (always available, mirror-only).
+  const sinceBaseline = summarize(classifyDrift(diffTokens(flattenDtcg(figma), flattenDtcg(baseline))));
+  if (sinceBaseline.total > 0) {
+    process.stderr.write(
+      `⚠️  token-drift-check: ${sinceBaseline.total} Figma token(s) changed since the accepted baseline `
+      + `(semantic ${sinceBaseline.semantic}, global ${sinceBaseline.global}). `
+      + `Run /figma-token-drift for the full Figma⟷Lumen report.\n`
+    );
+  }
+
+  // Optional Figma⟷Lumen drift when an on-disk Lumen snapshot exists.
+  if (lumen) {
+    const drift = summarize(classifyDrift(diffTokens(flattenDtcg(figma), flattenDtcg(lumen))));
+    if (drift.total > 0) {
+      const sev = drift.hasSemanticDrift ? "SEMANTIC drift present (higher severity)" : "global-only drift";
+      process.stderr.write(
+        `⚠️  token-drift-check: Figma⟷Lumen drift — ${drift.total} token(s), ${sev}. `
+        + `Detection only; nothing rewritten. See /figma-token-drift.\n`
+      );
+    }
+  }
+' 2>&1 || warn "engine run failed — skipping (advisory only)."
+
+# Advisory hook: ALWAYS succeed. Never block.
+exit 0

@@ -1,0 +1,35 @@
+// This is your Prisma schema file.
+// Learn more: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+generator zod {
+  provider                         = "zod-prisma-types"
+  output                           = "../generated/zod"
+  createRelationValuesTypes        = true
+  createPartialTypes               = true
+  addInputTypeValidation           = true
+  addIncludeType                   = true
+  addSelectType                    = true
+  validateWhereUniqueInput         = true
+  createOptionalDefaultValuesTypes = true
+  createNullableTypes              = false
+  useDefaultValidators             = true
+  coerceDate                       = true
+  writeNullishInModelTypes         = true
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id        String   @id @default(uuid())
+  lanId     String   @unique
+  email     String   @unique
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

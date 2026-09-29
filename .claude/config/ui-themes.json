@@ -1,0 +1,190 @@
+{
+  "presets": {
+    "vibrant": {
+      "name": "Vibrant",
+      "description": "Bold, energetic colors with high contrast",
+      "colorMapping": {
+        "primary": {
+          "lozenge": ["ocean-green", "sky-blue", "southern-sky", "blue"],
+          "accent": "tertiary",
+          "surface": "tertiary"
+        },
+        "emphasis": "high",
+        "surfaces": {
+          "hero": "tertiary",
+          "cards": "container",
+          "sections": ["tertiary-container", "container"]
+        },
+        "lozengeUsage": "frequent",
+        "contrastMode": "high"
+      },
+      "characteristics": {
+        "boldness": "high",
+        "playfulness": "high",
+        "professionalism": "medium"
+      }
+    },
+    "professional": {
+      "name": "Professional",
+      "description": "Clean, minimal, business-focused design",
+      "colorMapping": {
+        "primary": {
+          "lozenge": ["shade", "light", "brand"],
+          "accent": "brand",
+          "surface": "container"
+        },
+        "emphasis": "low",
+        "surfaces": {
+          "hero": "default",
+          "cards": "container",
+          "sections": ["container", "default"]
+        },
+        "lozengeUsage": "minimal",
+        "contrastMode": "medium"
+      },
+      "characteristics": {
+        "boldness": "low",
+        "playfulness": "low",
+        "professionalism": "high"
+      }
+    },
+    "calm": {
+      "name": "Calm",
+      "description": "Soothing, low-contrast, subtle design",
+      "colorMapping": {
+        "primary": {
+          "lozenge": ["ocean-green", "sky-blue"],
+          "accent": "ocean-green",
+          "surface": "container"
+        },
+        "emphasis": "low",
+        "surfaces": {
+          "hero": "container",
+          "cards": "default",
+          "sections": ["container", "tertiary-container"]
+        },
+        "lozengeUsage": "moderate",
+        "contrastMode": "low"
+      },
+      "characteristics": {
+        "boldness": "low",
+        "playfulness": "medium",
+        "professionalism": "medium"
+      }
+    },
+    "modern": {
+      "name": "Modern",
+      "description": "Contemporary, balanced, tech-forward",
+      "colorMapping": {
+        "primary": {
+          "lozenge": ["southern-sky", "blue", "sky-blue"],
+          "accent": "southern-sky",
+          "surface": "default"
+        },
+        "emphasis": "medium",
+        "surfaces": {
+          "hero": "contrast",
+          "cards": "container",
+          "sections": ["default", "container"]
+        },
+        "lozengeUsage": "moderate",
+        "contrastMode": "medium"
+      },
+      "characteristics": {
+        "boldness": "medium",
+        "playfulness": "medium",
+        "professionalism": "high"
+      }
+    },
+    "warm": {
+      "name": "Warm",
+      "description": "Inviting, friendly, approachable",
+      "colorMapping": {
+        "primary": {
+          "lozenge": ["red-earth", "ocean-green"],
+          "accent": "tertiary",
+          "surface": "tertiary-container"
+        },
+        "emphasis": "medium",
+        "surfaces": {
+          "hero": "tertiary",
+          "cards": "container",
+          "sections": ["tertiary-container", "container"]
+        },
+        "lozengeUsage": "moderate",
+        "contrastMode": "medium"
+      },
+      "characteristics": {
+        "boldness": "medium",
+        "playfulness": "high",
+        "professionalism": "medium"
+      }
+    }
+  },
+  "colorFamilies": {
+    "ocean-green": {
+      "primary": "#01a292",
+      "light": "#6ad1c5",
+      "lighter": "#c3ede6",
+      "dark": "#0c615a",
+      "mood": "calm, trustworthy, natural"
+    },
+    "sky-blue": {
+      "primary": "#0c9dc4",
+      "light": "#54c2e8",
+      "lighter": "#c0eaf7",
+      "dark": "#005f78",
+      "mood": "open, innovative, clear"
+    },
+    "southern-sky": {
+      "primary": "#7e83ed",
+      "light": "#959dff",
+      "lighter": "#dadfff",
+      "dark": "#4b49a5",
+      "mood": "creative, sophisticated, modern"
+    },
+    "blue": {
+      "primary": "#1368ef",
+      "light": "#7db1ff",
+      "lighter": "#cde5ff",
+      "dark": "#0d54ad",
+      "mood": "professional, reliable, corporate"
+    },
+    "red-earth": {
+      "primary": "#e46c2c",
+      "light": "#ffad73",
+      "lighter": "#fedbc9",
+      "dark": "#933600",
+      "mood": "warm, energetic, bold"
+    },
+    "tertiary": {
+      "primary": "#faec20",
+      "light": "#e4d700",
+      "lighter": "#fcf9db",
+      "dark": "#c8bd00",
+      "mood": "optimistic, attention-grabbing, branded"
+    }
+  },
+  "customColorRules": {
+    "mapping": {
+      "dominantColor": "Primary accent and major CTAs",
+      "accentColor1": "Secondary accents and lozenges",
+      "accentColor2": "Tertiary accents and subtle highlights",
+      "neutralColor": "Backgrounds and containers"
+    },
+    "suggestions": {
+      "#faec20,#fa915a,#01a292": {
+        "name": "Tropical Sunset",
+        "description": "Warm yellows with coral and teal accents",
+        "preset": "vibrant",
+        "lozengeOrder": ["tertiary", "red-earth", "ocean-green"]
+      },
+      "#01a292,#0c9dc4,#7e83ed": {
+        "name": "Ocean Depths",
+        "description": "Cool blues and greens, professional and calm",
+        "preset": "calm",
+        "lozengeOrder": ["ocean-green", "sky-blue", "southern-sky"]
+      }
+    }
+  }
+}

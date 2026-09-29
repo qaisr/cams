@@ -1,0 +1,223 @@
+/*
+ * PPCC reveal.js theme overlay — /create-presentation --format revealjs
+ * and /export --to pptx preview. Layer this OVER a base reveal theme
+ * (e.g. white) via pandoc: -V theme=white --css ppcc-revealjs.css
+ * Tokens mirror @.claude/standards/ppcc-brand.md and the placement/typography
+ * rules in @.claude/standards/presentation-standards.md — keep in sync.
+ * Approximated from public PPCC brand identity; replace when official assets land.
+ */
+
+:root {
+  --ppcc-yellow: #fcc016;
+  --ppcc-yellow-deep: #e5a800;
+  --ppcc-black: #000000;
+  --ppcc-ink: #1a1a1a;
+  --ppcc-white: #ffffff;
+  --ppcc-grey-900: #2d2d2d;
+  --ppcc-grey-600: #595959;
+  --ppcc-grey-300: #cccccc;
+  --ppcc-grey-100: #f4f4f4;
+  --ppcc-accent-teal: #008a8c;
+  --ppcc-accent-red: #c8102e;
+
+  --font-sans: 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+}
+
+/* ---------- Deck base ---------- */
+.reveal {
+  font-family: var(--font-sans);
+  color: var(--ppcc-ink);
+  font-size: 34px; /* body baseline; ~22pt-equivalent, stays >= 18pt */
+}
+.reveal .slides {
+  text-align: left; /* left-align body per placement standard */
+}
+
+/* Outer safe-area margin (~5%) is handled by reveal's margin config;
+   reinforce inner padding for content blocks. */
+.reveal .slides > section,
+.reveal .slides > section > section {
+  padding: 24px 40px;
+}
+
+/* ---------- Headings / hierarchy ---------- */
+.reveal h1,
+.reveal h2,
+.reveal h3,
+.reveal h4 {
+  font-family: var(--font-sans);
+  color: var(--ppcc-grey-900);
+  text-transform: none; /* sentence case, not all-caps */
+  letter-spacing: normal;
+  line-height: 1.2;
+  margin-bottom: 0.4em;
+}
+.reveal h1 {
+  font-size: 1.7em;
+  font-weight: 700;
+}
+.reveal h2 {
+  font-size: 1.3em;
+  font-weight: 600;
+}
+.reveal h3 {
+  font-size: 1.05em;
+  font-weight: 600;
+}
+
+/* Headline accent rule under slide headlines */
+.reveal section > h2:first-child::after,
+.reveal section > h1:first-child::after {
+  content: '';
+  display: block;
+  width: 72px;
+  height: 5px;
+  background: var(--ppcc-yellow);
+  margin-top: 0.35em;
+}
+
+/* ---------- Title slide ---------- */
+.reveal section.title-slide,
+.reveal section[data-state='title'] {
+  background: var(--ppcc-black);
+  color: var(--ppcc-white);
+  text-align: center;
+}
+.reveal section.title-slide h1 {
+  color: var(--ppcc-white);
+  font-size: 2em;
+}
+.reveal section.title-slide .subtitle,
+.reveal section.title-slide p {
+  color: var(--ppcc-yellow);
+}
+
+/* ---------- Section divider ---------- */
+.reveal section[data-state='section'] {
+  background: var(--ppcc-yellow);
+  color: var(--ppcc-black);
+  text-align: center;
+}
+.reveal section[data-state='section'] h1,
+.reveal section[data-state='section'] h2 {
+  color: var(--ppcc-black);
+}
+.reveal section[data-state='section'] h2::after {
+  display: none;
+}
+
+/* ---------- Lists ---------- */
+.reveal ul,
+.reveal ol {
+  display: block;
+  margin-left: 1em;
+}
+.reveal li {
+  margin: 0.35em 0;
+  line-height: 1.3;
+}
+.reveal ul li::marker {
+  color: var(--ppcc-yellow-deep);
+}
+
+/* ---------- Emphasis ---------- */
+.reveal strong {
+  color: var(--ppcc-grey-900);
+}
+.reveal em {
+  font-style: normal;
+  color: var(--ppcc-accent-teal);
+} /* avoid weak italics */
+.reveal a {
+  color: var(--ppcc-yellow-deep);
+}
+
+/* ---------- Big-number / stat ---------- */
+.reveal .stat {
+  font-size: 3.2em;
+  font-weight: 700;
+  color: var(--ppcc-black);
+  line-height: 1;
+}
+.reveal .stat-label {
+  font-size: 0.9em;
+  color: var(--ppcc-grey-600);
+}
+
+/* ---------- Quote / callout ---------- */
+.reveal blockquote {
+  border-left: 5px solid var(--ppcc-yellow);
+  background: var(--ppcc-grey-100);
+  color: var(--ppcc-grey-900);
+  padding: 0.6em 1em;
+  box-shadow: none;
+  font-style: normal;
+  width: 90%;
+}
+
+/* ---------- Tables (keep light on slides) ---------- */
+.reveal table {
+  font-size: 0.7em;
+  border-collapse: collapse;
+}
+.reveal th {
+  background: var(--ppcc-grey-900);
+  color: var(--ppcc-white);
+  border: 1px solid var(--ppcc-grey-300);
+  padding: 0.3em 0.6em;
+}
+.reveal td {
+  border: 1px solid var(--ppcc-grey-300);
+  padding: 0.3em 0.6em;
+}
+.reveal tbody tr:nth-child(even) {
+  background: var(--ppcc-grey-100);
+}
+
+/* ---------- Code ---------- */
+.reveal pre {
+  box-shadow: none;
+  width: 100%;
+  font-size: 0.55em;
+}
+.reveal code {
+  font-family: var(--font-mono);
+  background: var(--ppcc-grey-100);
+}
+
+/* ---------- Diagrams / images ---------- */
+.reveal section img,
+.reveal section svg {
+  border: none;
+  box-shadow: none;
+  background: transparent;
+  max-height: 62vh; /* leave room for headline + caption */
+}
+.reveal figcaption {
+  font-size: 0.6em;
+  color: var(--ppcc-grey-600);
+}
+
+/* ---------- Footer (logo/section + slide number) ---------- */
+.reveal .footer {
+  position: absolute;
+  bottom: 12px;
+  left: 40px;
+  right: 40px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.4em;
+  color: var(--ppcc-grey-600);
+  border-top: 2px solid var(--ppcc-yellow);
+  padding-top: 6px;
+}
+.reveal .slide-number {
+  color: var(--ppcc-grey-600);
+  background: transparent;
+}
+
+/* ---------- Progress bar ---------- */
+.reveal .progress {
+  color: var(--ppcc-yellow);
+}

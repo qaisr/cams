@@ -1,0 +1,18 @@
+# .husky/commit-msg
+# Validates commit message format against Conventional Commits spec.
+# Format: <type>(<optional-scope>): <subject>
+
+pnpm exec commitlint --edit "$1" || {
+  echo ""
+  echo "❌ Commit message format invalid."
+  echo ""
+  echo "   Required format: <type>(<scope>): <subject>"
+  echo "    Valid types:    feat fix docs style refactor perf test chore ci revert build"
+  echo ""
+  echo "   Examples:"
+  echo "     feat(users): add email verification endpoint"
+  echo "     fix(api): handle null user in auth guard"
+  echo "     chore: update dependencies"
+  echo "     docs: add API setup guide"
+  exit 1
+}

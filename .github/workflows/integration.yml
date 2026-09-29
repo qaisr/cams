@@ -1,0 +1,73 @@
+# Integration tests — real Postgres via Testcontainers, supertest
+# Runs on PR (after CI passes) and on push to main
+name: Integration Tests
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+concurrency:
+  group: integration-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '20'
+  PNPM_VERSION: '9'
+  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+  TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+
+jobs:
+  integration-tests:
+    name: Integration Tests (Testcontainers)
+    runs-on: ubuntu-latest # Docker available — required for Testcontainers
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run generation pipeline
+        run: pnpm generate
+        env:
+          DATABASE_URL: postgresql://placeholder:placeholder@localhost:5432/placeholder
+
+      - name: Run integration tests
+        run: pnpm --filter @repo/api test:integration --runInBand
+        env:
+          NODE_ENV: test
+          # Testcontainers pulls and manages its own Postgres container
+          # No DATABASE_URL needed — set dynamically per test suite
+          TESTCONTAINERS_RYUK_DISABLED: true # Faster in CI
+          AWS_REGION: ap-southeast-2
+          EVENT_BUS_NAME: test-bus
+          AUTH_JWKS_URI: http://localhost:4566/.well-known/jwks.json
+          AUTH_AUDIENCE: test-audience
+
+      - name: Upload integration coverage
+        uses: codecov/codecov-action@v4
+        if: always()
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: apps/api/coverage/lcov.info
+          flags: integration
+          fail_ci_if_error: false
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: integration-test-results
+          path: apps/api/test-results/
+          retention-days: 7

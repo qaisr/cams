@@ -1,0 +1,111 @@
+# .husky/pre-push
+# Target: <90 seconds
+# Runs unit tests + dependency security checks before push
+# Can be skipped in emergencies: git push --no-verify (document why!)
+
+# Skip on CI — CI pipeline runs its own checks
+[ -n "$CI" ] && exit 0
+
+echo "🚀 Pre-push checks..."
+
+# ── 0. Tooling integrity guards — fast, non-blocking (~ms) ────────────────────
+# Catches the class of latent tooling drift that silently breaks git hooks.
+
+# 0a. hooksPath sanity — a corrupted core.hooksPath breaks ALL hooks.
+#     (An accidental `husky --version` once rewrote this to `--version/_`,
+#      producing `sh: --version/_/pre-commit: invalid option`.)
+HOOKS_PATH=$(git config core.hooksPath 2>/dev/null)
+if [ -n "$HOOKS_PATH" ] && [ "$HOOKS_PATH" != ".husky/_" ]; then
+  echo ""
+  echo "⚠️  git core.hooksPath is '$HOOKS_PATH' (expected '.husky/_')."
+  echo "   Hooks may be running from the wrong place. Fix with:"
+  echo "     git config core.hooksPath .husky/_"
+fi
+
+# 0b. Stray husky-accident install dir — `./--version`, `./--*` at repo root.
+for STRAY in ./--*; do
+  [ -e "$STRAY" ] || continue
+  echo ""
+  echo "⚠️  Stray directory '$STRAY' looks like husky-install junk."
+  echo "   Remove it with:  rm -rf '$STRAY'"
+done
+
+# 0c. Husky v9→v10 deprecation self-check.
+# Match only the real preamble: a shebang on line 1, or a dot-source *command*
+# for husky.sh (a line beginning with `. ` — not an echo string mentioning it).
+DEPRECATED_HOOKS=""
+for HOOK in .husky/pre-commit .husky/pre-push .husky/commit-msg; do
+  [ -f "$HOOK" ] || continue
+  if [ "$(head -n 1 "$HOOK")" = "#!/usr/bin/env sh" ] \
+    || grep -qE '^[[:space:]]*\.[[:space:]].*/_/husky\.sh' "$HOOK"; then
+    DEPRECATED_HOOKS="$DEPRECATED_HOOKS $HOOK"
+  fi
+done
+if [ -n "$DEPRECATED_HOOKS" ]; then
+  echo ""
+  echo "⚠️  Deprecated husky v9 preamble found in:$DEPRECATED_HOOKS"
+  echo "   Remove the shebang and the husky.sh sourcing line (husky v10 format)."
+fi
+
+# ── 1. Unit tests — affected packages only (Turborepo cache) ──────────────────
+echo "🧪 Running unit tests (affected packages)..."
+pnpm turbo run test --affected --output-logs=errors-only -- --passWithNoTests || {
+  echo ""
+  echo "❌ Unit tests failed. Fix before pushing."
+  echo "   Run: pnpm test"
+  exit 1
+}
+
+# ── 2. pnpm audit — local, no network token needed ────────────────────────────
+echo "🔒 Checking for known vulnerabilities (pnpm audit)..."
+# Capture output so we can detect the internal-registry 404 without aborting the
+# hook (husky runs `sh -e`; a non-zero audit exit must not fail the push).
+AUDIT_OUT=$(pnpm audit --audit-level=high 2>&1) && AUDIT_EXIT=0 || AUDIT_EXIT=$?
+if echo "$AUDIT_OUT" | grep -q "ERR_PNPM_AUDIT_ENDPOINT_NOT_EXISTS"; then
+  # Internal Artifactory registry has no audit endpoint — expected, not an error.
+  echo "ℹ️  audit endpoint unavailable on internal registry — deferred to /health-scan / CI"
+elif [ "$AUDIT_EXIT" -ne 0 ]; then
+  echo "$AUDIT_OUT" | tail -5
+  echo ""
+  echo "⚠️  pnpm audit found high/critical vulnerabilities."
+  echo "   Run 'pnpm audit' or '/health-scan' to review. Full Snyk scan runs in CI."
+  echo "   To block push on audit failure: edit .husky/pre-push"
+  # Non-blocking — Snyk in CI is the authoritative gate
+fi
+
+# ── 3. Snyk CLI — local scan (optional — only if SNYK_TOKEN set locally) ──────
+# Snyk is authoritative in CI. Local scan is a convenience early-warning.
+# To enable: export SNYK_TOKEN=<your-personal-token> in your shell profile.
+if [ -n "$SNYK_TOKEN" ]; then
+  echo "🛡️  Running Snyk scan (local)..."
+  pnpm exec snyk test \
+    --severity-threshold=high \
+    --all-projects \
+    --detection-depth=4 \
+    --json-file-output=.snyk-results.json \
+    --quiet 2>/dev/null || {
+    SNYK_EXIT=$?
+    if [ $SNYK_EXIT -eq 1 ]; then
+      echo ""
+      echo "❌ Snyk found high/critical vulnerabilities."
+      echo "   Run 'pnpm exec snyk test' to review."
+      echo "   Results saved to .snyk-results.json"
+      echo ""
+      echo "   To fix:  pnpm exec snyk fix"
+      echo "   To ignore (with reason): pnpm exec snyk ignore --id=SNYK-XXX"
+      exit 1
+    fi
+    # Exit 2 = auth error, 3 = no supported files — not blocking
+  }
+  rm -f .snyk-results.json
+  echo "✅ Snyk scan passed"
+else
+  echo "ℹ️  Snyk local scan skipped (SNYK_TOKEN not set — CI Snyk scan is authoritative)"
+fi
+
+# ── 4. SonarQube: NOT run in pre-push ─────────────────────────────────────────
+# Requires SonarQube server (only accessible via DirectConnect / CI runner),
+# complete coverage reports from a full test run, and PR context for accurate
+# new-code analysis. SonarQube runs exclusively in CI: .github/workflows/sonar.yml
+
+echo "✅ Pre-push passed"

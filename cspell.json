@@ -1,0 +1,47 @@
+{
+  "$schema": "https://raw.githubusercontent.com/streetsidesoftware/cspell/main/cspell.schema.json",
+  "version": "0.2",
+  "language": "en,en-GB,en-AU",
+  "import": [
+    "@cspell/dict-en-gb-mit/cspell-ext.json",
+    "@cspell/dict-en-au/cspell-ext.json",
+    "@cspell/dict-en_us/cspell-ext.json",
+    "@cspell/dict-software-terms/cspell-ext.json",
+    "@cspell/dict-aws/cspell-ext.json"
+  ],
+  "dictionaries": [
+    "en-gb-mit",
+    "en-au",
+    "en_us",
+    "softwareTerms",
+    "aws",
+    "project-words"
+  ],
+  "dictionaryDefinitions": [
+    {
+      "name": "project-words",
+      "path": ".cspell/project-words.txt",
+      "addWords": true
+    }
+  ],
+  "ignorePaths": [
+    "node_modules/**",
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/build/**",
+    "**/.next/**",
+    "**/coverage/**",
+    "**/.turbo/**",
+    "pnpm-lock.yaml",
+    "package-lock.json",
+    "**/generated/**",
+    "packages/api-spec/generated/**",
+    "apps/web/src/hooks/generated/**",
+    "apps/web/src/mocks/generated/**",
+    "**/*.min.js",
+    "**/*.snap",
+    ".cspell/project-words.txt",
+    "ISDA/**",
+    "raw-requirements/**"
+  ]
+}

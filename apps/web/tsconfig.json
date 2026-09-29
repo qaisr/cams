@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "../../packages/tsconfig/nextjs.json",
+  "compilerOptions": {
+    "composite": true,
+    "paths": {
+      "@/*": ["./src/*"],
+      "@repo/database": ["../../packages/database/src/index.ts"],
+      "@repo/validation": ["../../packages/validation/src/index.ts"],
+      "@repo/common": ["../../packages/common/src/index.ts"],
+      "@repo/shared-config": ["../../packages/shared-config/src/index.ts"]
+    }
+  },
+  "include": [
+    "next-env.d.ts",
+    "app/**/*.ts",
+    "app/**/*.tsx",
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    ".storybook/**/*.ts",
+    ".storybook/**/*.tsx",
+    ".next/types/**/*.ts"
+  ],
+  "exclude": ["node_modules", "src/mocks/generated/**"]
+}

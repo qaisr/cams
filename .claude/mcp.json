@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "playwright": {
+      "command": "npx",
+      "args": [
+        "@playwright/mcp",
+        "--browser",
+        "chromium",
+        "--headless",
+        "false"
+      ],
+      "env": {
+        "PLAYWRIGHT_BASE_URL": "http://localhost:3000"
+      }
+    }
+  }
+}

@@ -1,0 +1,257 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://cans.ppcc/confluence/manifest.schema.json",
+  "title": "CANS Confluence citation-cache schemas",
+  "description": "JSON Schema for the four Confluence-mirror state layers (01c §2.1, §2.3, §3.1). Each layer has one owner: per-item sidecars + .manifest.json are authoritative cache state; per-space {SPACE}.json is the space roster + treeHash; _index.json is DERIVED/regenerable (gitignored). Mirrors jira/manifest.schema.json, adapted for Confluence. Validate any layer by referencing the matching $def, e.g. { \"$ref\": \"manifest.schema.json#/$defs/itemSidecar\" }.",
+
+  "$defs": {
+    "statusSync": {
+      "description": "Local cache state relative to remote. Named status_sync so it never collides with any Confluence content status (01c §2.1).",
+      "type": "string",
+      "enum": [
+        "clean",
+        "remote-ahead",
+        "local-ahead",
+        "diverged",
+        "new",
+        "orphaned"
+      ]
+    },
+
+    "sha256": {
+      "description": "SHA-256 digest, sha256:<hex> form (scripts/confluence/hash.ts, Phase 3).",
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+
+    "contentType": {
+      "description": "Mirrored Confluence content type. Maps to a confluence/ subfolder: page→pages/, blogpost→blogposts/. Attachments are tracked under attachments/.",
+      "type": "string",
+      "enum": ["page", "blogpost"]
+    },
+
+    "itemSidecar": {
+      "description": "Per-item {SPACE}-{pageId}.json sidecar for pages/blogposts — the authoritative per-item cache state (01c §2.1). The human body lives in the sibling .md; this file carries structured metadata + the dual hashes + the two-timestamp fields.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "pageId",
+        "spaceKey",
+        "type",
+        "title",
+        "url",
+        "remoteLastModified",
+        "contentHash",
+        "localEditsHash",
+        "status_sync",
+        "lastSyncedAt"
+      ],
+      "properties": {
+        "source": { "const": "confluence" },
+        "pageId": {
+          "type": "string",
+          "description": "Confluence content id, e.g. 2097876103."
+        },
+        "spaceKey": {
+          "type": "string",
+          "description": "Owning space key, e.g. SEC or PCON."
+        },
+        "type": { "$ref": "#/$defs/contentType" },
+        "title": { "type": "string" },
+        "url": { "type": "string", "format": "uri" },
+        "ancestors": {
+          "type": "array",
+          "description": "Ordered ancestor pageIds (root → immediate parent), for local tree reconstruction (01c §2.1).",
+          "items": { "type": "string" }
+        },
+        "labels": { "type": "array", "items": { "type": "string" } },
+        "remoteLastModified": {
+          "type": ["string", "null"],
+          "description": "Confluence lastModified as returned by the MCP tools — an opaque display string (format varies: relative or absolute), compared only for exact equality, never parsed. null until first pull."
+        },
+        "contentHash": {
+          "$ref": "#/$defs/sha256",
+          "description": "Hash of the .md body as last written by ingest/sync — the last-pulled body (01c §2.2)."
+        },
+        "localEditsHash": {
+          "$ref": "#/$defs/sha256",
+          "description": "Hash of the .md body as it currently sits on disk. Differs from contentHash ⇒ human hand-edit ⇒ never clobber (01c §2.2)."
+        },
+        "status_sync": { "$ref": "#/$defs/statusSync" },
+        "lastSyncedAt": {
+          "type": ["string", "null"],
+          "format": "date-time",
+          "description": "When this sidecar's body was last written by a REAL remote pull. null until first pull. reindex must NOT touch it (01c §3.1 two-timestamp invariant)."
+        },
+        "commentsPulled": {
+          "type": "boolean",
+          "description": "Whether inline/footer comments were cached alongside the body on the last pull (config.pullComments)."
+        },
+        "sourceRef": {
+          "type": ["string", "null"],
+          "description": "Relative path to the cached .md body, e.g. confluence/pages/SEC-2097876103.md."
+        }
+      }
+    },
+
+    "spaceManifest": {
+      "description": "Per-space manifest confluence/spaces/{SPACE}.json (01c §2.3): the space roster + treeHash for cheap per-space structural change detection. Points at each cached item's sidecar.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "spaceKey", "items", "treeHash"],
+      "properties": {
+        "source": { "const": "confluence" },
+        "spaceKey": { "type": "string" },
+        "name": {
+          "type": ["string", "null"],
+          "description": "Human-facing space name, e.g. CITB Solution — Entity onboarding."
+        },
+        "url": { "type": ["string", "null"], "format": "uri" },
+        "treeHash": {
+          "$ref": "#/$defs/sha256",
+          "description": "Hash of the sorted (pageId, remoteLastModified, ancestors) roster — detects a remote page add/remove/move/update on space sync (01c §2.3)."
+        },
+        "lastSyncedAt": {
+          "type": ["string", "null"],
+          "format": "date-time",
+          "description": "Last real pull for this space. null until first pull; reindex must never touch it."
+        },
+        "items": {
+          "type": "array",
+          "description": "Space roster. Authoritative for the space subtree; mirrored (derived) into _index.json.tree.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["pageId", "type", "file", "title"],
+            "properties": {
+              "pageId": { "type": "string" },
+              "type": { "$ref": "#/$defs/contentType" },
+              "file": {
+                "type": "string",
+                "description": "Sidecar path, e.g. confluence/pages/SEC-2097876103.json."
+              },
+              "title": { "type": "string" },
+              "ancestors": { "type": "array", "items": { "type": "string" } },
+              "remoteLastModified": { "type": ["string", "null"] }
+            }
+          }
+        }
+      }
+    },
+
+    "domainManifest": {
+      "description": "confluence/.manifest.json — authoritative cache scope + per-item pointers (committed, low-churn) (01c §2). items is keyed by {SPACE}-{pageId}; empty at fresh init: { \"items\": {}, \"version\": 1 }.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["items", "version"],
+      "properties": {
+        "$schema": { "type": "string" },
+        "version": {
+          "type": "integer",
+          "description": "Manifest format version. 1 at fresh init."
+        },
+        "cloudId": { "type": "string" },
+        "site": {
+          "type": "string",
+          "description": "e.g. commbank.atlassian.net"
+        },
+        "spaces": {
+          "type": "array",
+          "description": "Space keys in scope, kept in sync with confluence-sync.config.yml spaces block.",
+          "items": { "type": "string" }
+        },
+        "items": {
+          "type": "object",
+          "description": "One entry per cached item, keyed by {SPACE}-{pageId} — the pointer + a copy of the sync-critical fields for a cheap scope read (full state is in the sidecar). Empty object at fresh init.",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["pageId", "spaceKey", "type", "file", "status_sync"],
+            "properties": {
+              "pageId": { "type": "string" },
+              "spaceKey": { "type": "string" },
+              "type": { "$ref": "#/$defs/contentType" },
+              "file": {
+                "type": "string",
+                "description": "Sidecar path, e.g. confluence/pages/SEC-2097876103.json."
+              },
+              "status_sync": { "$ref": "#/$defs/statusSync" },
+              "remoteLastModified": { "type": ["string", "null"] },
+              "lastSyncedAt": {
+                "type": ["string", "null"],
+                "format": "date-time"
+              }
+            }
+          }
+        }
+      }
+    },
+
+    "index": {
+      "description": "confluence/_index.json — DERIVED, regenerable rollup the confluence-search agent loads (01c §3.1). GITIGNORED. Never hand-authored; rebuilt from sidecars + space manifests on every sync and by the offline reindex. generatedAt = last rebuild; lastSyncedAt = last remote pull (reindex must NOT touch lastSyncedAt — §3.1 invariant).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "generatedAt",
+        "lastSyncedAt",
+        "counts",
+        "items",
+        "tree",
+        "orphans"
+      ],
+      "properties": {
+        "generatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Last reindex/rebuild time. Set on EVERY reindex."
+        },
+        "lastSyncedAt": {
+          "type": ["string", "null"],
+          "format": "date-time",
+          "description": "Last real remote pull time across the mirror. null at fresh init until the first pull (§3.1 timestamp invariant); reindex must never touch it."
+        },
+        "counts": {
+          "type": "object",
+          "additionalProperties": { "type": "integer" }
+        },
+        "items": {
+          "type": "array",
+          "description": "One-line summaries the agent answers most prompts from, drilling into a .md only for full detail (01c §3.1).",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["pageId", "spaceKey", "type", "title", "file"],
+            "properties": {
+              "pageId": { "type": "string" },
+              "spaceKey": { "type": "string" },
+              "type": { "$ref": "#/$defs/contentType" },
+              "title": { "type": "string" },
+              "labels": { "type": "array", "items": { "type": "string" } },
+              "ancestors": { "type": "array", "items": { "type": "string" } },
+              "status_sync": { "$ref": "#/$defs/statusSync" },
+              "file": { "type": "string" }
+            }
+          }
+        },
+        "tree": {
+          "type": "object",
+          "description": "space key → { name, roots[] } / pageId → children[]. Derived from per-space manifests.",
+          "additionalProperties": true
+        },
+        "orphans": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Keys present in manifest but absent from remote, pending disposition."
+        }
+      }
+    }
+  },
+
+  "oneOf": [
+    { "$ref": "#/$defs/domainManifest" },
+    { "$ref": "#/$defs/spaceManifest" },
+    { "$ref": "#/$defs/itemSidecar" },
+    { "$ref": "#/$defs/index" }
+  ]
+}

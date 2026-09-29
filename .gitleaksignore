@@ -1,0 +1,19 @@
+# .gitleaksignore
+# Format: <fingerprint> as reported by `gitleaks protect --staged -v`
+# (file:rule-id:line for uncommitted/staged scans on gitleaks 8.x)
+# Each entry must have a comment explaining why it is ignored
+
+# Example (uncomment when needed):
+# abc123def456:generic-api-key   # Test fixture — not a real key
+
+# Figma file key "2MbwX0rxNA1uhgDwlC7Z6G" — a public identifier from a Figma
+# file URL (figma.com/design/<fileKey>/...), not a credential. Pinned once in
+# .claude/config/figma-sync.config.yml and referenced by the mirror + scripts.
+# High entropy trips the generic-api-key heuristic; there is no secret here.
+.claude/config/figma-sync.config.yml:generic-api-key:20
+figma/.manifest.json:generic-api-key:5
+figma/files/2MbwX0rxNA1uhgDwlC7Z6G.json:generic-api-key:3
+figma/nodes/mid-fi-e2e-flow.meta.json:generic-api-key:4
+scripts/figma/validate.ts:generic-api-key:261
+scripts/figma/reindex.ts:generic-api-key:420
+scripts/figma/reindex.ts:generic-api-key:465

@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "ceb": { "type": "http", "url": "https://ceb.ppcc/mcp" },
+    "context7": { "type": "http", "url": "https://mcp.context7.com/mcp" },
+    "playwright": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@playwright/mcp@latest"],
+      "env": {}
+    },
+    "figma": { "type": "http", "url": "https://mcp.figma.com/mcp" },
+    "lumen": { "type": "http", "url": "https://tools.lumen.ppcc/mcp" }
+  }
+}
